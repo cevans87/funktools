@@ -58,6 +58,8 @@ import sys
 import types
 import typing
 
+from pygments.lexer import default
+
 from . import _base
 
 
@@ -271,17 +273,68 @@ class _SideEffect[T]:
         object.__setattr__(self, '_side_effect', _side_effect)
 
 
+_Help = typing.Annotated[bool, 'Show this help text and exit.']
 _LogLevelInt = typing.Annotated[int, annotated_types.Interval(ge=10, le=60)]
 _LogLevelStr = typing.Literal['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'NOTSET']
 _LogLevel = _LogLevelInt | _LogLevelStr
-
+_Subcommand
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class _Annotated:
 
+    Help: typing.ClassVar[type[_Help]] = _Help
     LogLevelStr: typing.ClassVar[type[_LogLevelStr]] = _LogLevelStr
     LogLevelInt: typing.ClassVar[type[_LogLevelInt]] = _LogLevelInt
     LogLevel: typing.ClassVar[type[_LogLevel]] = _LogLevel
+
+    @staticmethod
+    def help() -> type[_Help]:
+
+        class HelpAction(argparse.Action):
+
+            def __init__(
+                self,
+                option_strings,
+                dest=argparse.SUPPRESS,
+                default=argparse.SUPPRESS,
+                deprecated=False,
+                help=None,
+                type=None,
+            ) -> None:
+                super().__init__(
+                    option_strings=option_strings,
+                    dest=dest,
+                    default=default,
+                    deprecated=deprecated,
+                    help=help,
+                    nargs=0,
+                    type=type,
+                )
+
+            def __call__(
+                self,
+                parser: argparse.ArgumentParser,
+                namespace: argparse.Namespace,
+                values: list[object],
+                option_string=None,
+            ) -> None:
+                parser.print_help()
+                parser.exit()
+
+        return typing.Annotated[
+            _Help,
+            _AddArgument[_Help](name_or_flags=['-h', '--help'], action=HelpAction),
+        ]
+
+    @staticmethod
+    def log_level(logger_or_name: logging.Logger | str, /) -> type[_LogLevel]:
+        logger = logger_or_name if isinstance(logger_or_name, logging.Logger) else logging.getLogger(logger_or_name)
+
+        return typing.Annotated[
+            _LogLevelStr,
+            _AddArgument[_LogLevelStr](name_or_flags=['-l', '--log-level']),
+            _SideEffect[_LogLevelStr](lambda log_level: logger.setLevel(log_level))
+        ]
 
     @staticmethod
     def quiet(logger_or_name: logging.Logger | str, /) -> type[_LogLevelInt]:
@@ -289,8 +342,11 @@ class _Annotated:
 
         class QuietAction(argparse.Action):
             def __call__(
-                self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: list[object],
-                option_string=None
+                self,
+                parser: argparse.ArgumentParser,
+                namespace: argparse.Namespace,
+                values: list[object],
+                option_string=None,
             ) -> None:
                 logger.setLevel(level := min(getattr(namespace, self.dest) + 10, logging.CRITICAL + 10))
                 setattr(namespace, self.dest, level)
@@ -302,13 +358,28 @@ class _Annotated:
         ]
 
     @staticmethod
+    def subcommand(subcommands: list[_base.Decoratee]):
+        # TODO: Finish this. It should decorate the subcommands if they're not already decorated.
+
+        # register the subcommands in the current namespace.
+
+        return typing.Annotated[
+            _Subcommand,
+            _AddArgument[_Subcommand](name_or_flags=['subcommand']),
+            _SideEffect[_LogLevelStr](lambda subcommand: logger.setLevel(log_level))
+        ]
+
+    @staticmethod
     def verbose(logger_or_name: logging.Logger | str, /) -> type[_LogLevelInt]:
         logger = logger_or_name if isinstance(logger_or_name, logging.Logger) else logging.getLogger(logger_or_name)
 
         class VerboseAction(argparse.Action):
             def __call__(
-                self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: list[object],
-                option_string=None
+                self,
+                parser: argparse.ArgumentParser,
+                namespace: argparse.Namespace,
+                values: list[object],
+                option_string=None,
             ) -> None:
                 logger.setLevel(level := max(getattr(namespace, self.dest) - 10, logging.DEBUG))
                 setattr(namespace, self.dest, level)
@@ -317,16 +388,6 @@ class _Annotated:
             _LogLevelInt,
             _AddArgument[_LogLevelInt](name_or_flags=['-v', '--verbose'], action=VerboseAction, nargs=0),
             _SideEffect[_LogLevelInt](lambda verbose: logger.setLevel(verbose))
-        ]
-
-    @staticmethod
-    def log_level(logger_or_name: logging.Logger | str, /) -> type[_LogLevelStr]:
-        logger = logger_or_name if isinstance(logger_or_name, logging.Logger) else logging.getLogger(logger_or_name)
-
-        return typing.Annotated[
-            _LogLevelStr,
-            _AddArgument[_LogLevelStr](name_or_flags=['-l', '--log-level']),
-            _SideEffect[_LogLevelStr](lambda log_level: logger.setLevel(log_level))
         ]
 
 
@@ -413,6 +474,7 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
                 ])
             case _: assert False, 'Unreachable'  # pragma: no cover
 
+        # FIXME: Even if the decorated exists, we want to add subcommands at the end. So, we need to generate a
         if (decorated := self.register.decorateds.get(register_key)) is None:
             def decoratee(subcommand: typing.Literal[*sorted(self.register.links.get(register_key, set()))]) -> None:  # noqa
                 self.get_argument_parser(register_key).print_usage()
@@ -430,11 +492,12 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
         decorated = self.gen_decorated(key)
 
         argument_parser = ArgumentParser(
-            description='\n'.join(filter(None, [
-                decorated.__doc__,
-                f'return type: {pprint.pformat(decorated.signature.return_annotation, compact=True, width=75)}'
+            description='\n\n'.join(filter(None, [
+                decorated.__doc__.strip(),
+                f'return:\n  {pprint.pformat(decorated.signature.return_annotation, compact=True, width=75)}'
             ])),
-            formatter_class=argparse.RawTextHelpFormatter
+            formatter_class=argparse.RawTextHelpFormatter,
+            add_help=False,
         )
 
         for parameter in decorated.signature.parameters.values():
@@ -449,7 +512,11 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
 
         return argument_parser
 
-    def run(self, decorated_or_key: _base.Decorated | _base.Register.Key | str, args: list[str] = ...) -> None:
+    def run(
+        self,
+        decorated_or_key: _base.Decorated | _base.Register.Key | str,
+        args: typing.Sequence[str] = ...,
+    ) -> None:
         match decorated_or_key:
             case str():
                 register_key = _base.Register.Key([*re.sub(r'.<.*>', '', decorated_or_key).split('.')])
@@ -465,6 +532,7 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
             register_key = _base.Register.Key([*register_key, args.pop(0)])
 
         argument_parser = self.get_argument_parser(register_key)
+        argument_parser.parse_known_intermixed_args(args)
         parsed_ns, remainder_args = argument_parser.parse_known_args(args)
         parsed_args = vars(parsed_ns)
 

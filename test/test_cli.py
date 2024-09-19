@@ -477,3 +477,12 @@ def test_var_keyword_args_are_parsed() -> None:
     assert funktools.CLI().run(
         entrypoint, shlex.split('--foo 1 --bar 2 --baz 3')
     ) == {'foo': {'foo': 1, 'bar': 2, 'baz': 3}}
+
+def test_help_works_on_subcommand() -> None:
+    @funktools.CLI()
+    def foo() -> None:
+        @funktools.CLI()
+        def bar() -> None
+            pass
+
+        funktools.CLI().run(bar)

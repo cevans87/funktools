@@ -4,7 +4,6 @@ import abc
 import dataclasses
 import inspect
 import logging
-import types
 import typing
 
 from . import _base

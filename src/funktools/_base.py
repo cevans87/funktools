@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import abc
-import builtins
 import dataclasses
 import inspect
 import re
 import sys
 import threading
-import traceback
 import types
 import typing
 import weakref
