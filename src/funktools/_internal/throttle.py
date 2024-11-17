@@ -10,8 +10,7 @@ import threading
 import time
 import typing
 
-from . import _base
-
+from . import base
 
 type Condition = asyncio.Condition | threading.Condition
 type Lock = asyncio.Lock | threading.Lock
@@ -221,7 +220,7 @@ class MultiAIMDSemaphore(AIMDSemaphore):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Context[** Params, Return](_base.ContextBase, abc.ABC):
+class Context[** Params, Return](base.ContextBase, abc.ABC):
     semaphore: AIMDSemaphore
 
     semaphore_t = AIMDSemaphore
@@ -230,7 +229,7 @@ class Context[** Params, Return](_base.ContextBase, abc.ABC):
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AsyncContext[** Params, Return](
     Context[Params, Return],
-    _base.AsyncContext[Params, Return],
+    base.AsyncContext[Params, Return],
     abc.ABC,
 ):
     semaphore: AsyncAIMDSemaphore
@@ -241,7 +240,7 @@ class AsyncContext[** Params, Return](
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MultiContext[** Params, Return](
     Context[Params, Return],
-    _base.MultiContext[Params, Return],
+    base.MultiContext[Params, Return],
     abc.ABC,
 ):
     semaphore: MultiAIMDSemaphore
@@ -252,7 +251,7 @@ class MultiContext[** Params, Return](
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class EnterContext[** Params, Return](
     Context[Params, Return],
-    _base.EnterContext[Params, Return],
+    base.EnterContext[Params, Return],
     abc.ABC,
 ):
     start: int
@@ -262,10 +261,10 @@ class EnterContext[** Params, Return](
         self,
         *args: Params.args,
         **kwargs: Params.kwargs,
-    ) -> (ExitContext[Params, Return], _base.EnterContext[Params, Return]):
+    ) -> (ExitContext[Params, Return], base.EnterContext[Params, Return]):
         return self.exit_context_t(semaphore=self.semaphore), self.next_enter_context
 
-    def __get__(self, instance: _base.Instance, owner) -> typing.Self:
+    def __get__(self, instance: base.Instance, owner) -> typing.Self:
         with self.instance_lock:
             if (enter_context := self.enter_context_by_instance.get(instance)) is None:
                 enter_context = self.enter_context_by_instance[instance] = dataclasses.replace(
@@ -288,7 +287,7 @@ class EnterContext[** Params, Return](
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ExitContext[** Params, Return](
     Context[Params, Return],
-    _base.ExitContext[Params, Return],
+    base.ExitContext[Params, Return],
     abc.ABC,
 ): ...
 
@@ -297,13 +296,13 @@ class ExitContext[** Params, Return](
 class AsyncEnterContext[** Params, Return](
     EnterContext[Params, Return],
     AsyncContext[Params, Return],
-    _base.AsyncEnterContext[Params, Return],
+    base.AsyncEnterContext[Params, Return],
 ):
     async def __call__(
         self,
         *args: Params.args,
         **kwargs: Params.kwargs,
-    ) -> (AsyncExitContext[Params, Return], _base.AsyncEnterContext[Params, Return]):
+    ) -> (AsyncExitContext[Params, Return], base.AsyncEnterContext[Params, Return]):
         await self.semaphore.acquire()
         return super().__call__(*args, **kwargs)
 
@@ -312,13 +311,13 @@ class AsyncEnterContext[** Params, Return](
 class MultiEnterContext[** Params, Return](
     EnterContext[Params, Return],
     MultiContext[Params, Return],
-    _base.MultiEnterContext[Params, Return],
+    base.MultiEnterContext[Params, Return],
 ):
     def __call__(
         self,
         *args: Params.args,
         **kwargs: Params.kwargs,
-    ) -> (MultiExitContext[Params, Return], _base.MultiEnterContext[Params, Return]):
+    ) -> (MultiExitContext[Params, Return], base.MultiEnterContext[Params, Return]):
         self.semaphore.acquire()
         return super().__call__(*args, **kwargs)
 
@@ -327,14 +326,14 @@ class MultiEnterContext[** Params, Return](
 class AsyncExitContext[** Params, Return](
     ExitContext[Params, Return],
     AsyncContext[Params, Return],
-    _base.AsyncExitContext[Params, Return],
+    base.AsyncExitContext[Params, Return],
 ):
 
     semaphore: AsyncAIMDSemaphore
     semaphore_t: typing.ClassVar = AsyncAIMDSemaphore
 
-    async def __call__(self, result: _base.Raise | Return) -> _base.Raise | Return:
-        if isinstance(result, _base.Raise):
+    async def __call__(self, result: base.Raise | Return) -> base.Raise | Return:
+        if isinstance(result, base.Raise):
             await self.semaphore.release(ok=False)
         else:
             await self.semaphore.release(ok=True)
@@ -345,13 +344,13 @@ class AsyncExitContext[** Params, Return](
 class MultiExitContext[** Params, Return](
     ExitContext[Params, Return],
     MultiContext[Params, Return],
-    _base.MultiExitContext[Params, Return],
+    base.MultiExitContext[Params, Return],
 ):
     semaphore: MultiAIMDSemaphore
     semaphore_t: typing.ClassVar = MultiAIMDSemaphore
 
-    def __call__(self, result: _base.Raise | Return) -> _base.Raise | Return:
-        if isinstance(result, _base.Raise):
+    def __call__(self, result: base.Raise | Return) -> base.Raise | Return:
+        if isinstance(result, base.Raise):
             self.semaphore.release(ok=False)
         else:
             self.semaphore.release(ok=True)
@@ -359,7 +358,7 @@ class MultiExitContext[** Params, Return](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](_base.Decorator[Params, Return]):
+class Decorator[** Params, Return](base.Decorator[Params, Return]):
     additive_increase: typing.Annotated[int, annotated_types.Ge(0)] = 1
     multiplicative_decrease: typing.Annotated[float, annotated_types.Interval[float](ge=0.0, le=1.0)] = .5
 
@@ -378,19 +377,19 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
     per_pane: int = sys.maxsize
     per_window: int = sys.maxsize
 
-    register: typing.ClassVar[_base.Register] = _base.Register()
+    register: typing.ClassVar[base.Register] = base.Register()
 
     def __call__(
         self,
-        decoratee: _base.Decoratee[Params, Return] | _base.Decorated[Params, Return],
+        decoratee: base.Decoratee[Params, Return] | base.Decorated[Params, Return],
         /,
-    ) -> _base.Decorated[Params, Return]:
+    ) -> base.Decorated[Params, Return]:
         decoratee = super().__call__(decoratee)
 
         match decoratee:
-            case _base.AsyncDecorated():
+            case base.AsyncDecorated():
                 enter_context_t = AsyncEnterContext
-            case _base.MultiDecorated():
+            case base.MultiDecorated():
                 enter_context_t = MultiEnterContext
             case _: assert False, 'Unreachable'  # pragma: no cover
 

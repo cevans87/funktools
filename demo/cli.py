@@ -149,7 +149,7 @@ def optional(
 ) -> None:
     """Demo for CLI entrypoint with typing.Optional argument.
 
-    Note: CLI can only parse Optional types that contain builtin primitives.
+    CeNote: CLI can only parse Optional types that contain builtin primitives.
 
     Ex:
         python3 -m demo cli optional None
@@ -164,10 +164,10 @@ def union_type(
 ) -> None:
     """Demo for CLI entrypoint types.UnionType argument.
 
-    Note that typing.Union (e.g. `typing.Union[int, str]`) is not the same as types.Union (e.g. `int | str`). This CLI
+    CeNote that typing.Union (e.g. `typing.Union[int, str]`) is not the same as types.Union (e.g. `int | str`). This CLI
     handles both types of unions.
 
-    Note: CLI can only parse Union types that contain builtin primitives.
+    CeNote: CLI can only parse Union types that contain builtin primitives.
 
     Ex:
         python3 -m demo cli union_type True

@@ -6,15 +6,14 @@ import inspect
 import logging
 import typing
 
-from . import _base
-
+from . import base
 
 Level = typing.Literal['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'NOTSET']
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class EnterContext[** Params, Return](
-    _base.EnterContext,
+    base.EnterContext,
     abc.ABC,
 ):
     call_level: Level
@@ -28,7 +27,7 @@ class EnterContext[** Params, Return](
         self,
         *args: Params.args,
         **kwargs: Params.kwargs,
-    ) -> (ExitContext[Params, Return], _base.EnterContext[Params, Return]):
+    ) -> (ExitContext[Params, Return], base.EnterContext[Params, Return]):
         bound_arguments = self.signature.bind(*args, **kwargs)
 
         self.logger.log(
@@ -47,7 +46,7 @@ class EnterContext[** Params, Return](
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ExitContext[** Params, Return](
-    _base.ExitContext,
+    base.ExitContext,
     abc.ABC,
 ):
     bound_arguments: inspect.BoundArguments
@@ -58,9 +57,9 @@ class ExitContext[** Params, Return](
     @abc.abstractmethod
     def __call__(
         self,
-        result: _base.Raise | Return
-    ) -> _base.Raise | Return:
-        if isinstance(result, _base.Raise):
+        result: base.Raise | Return
+    ) -> base.Raise | Return:
+        if isinstance(result, base.Raise):
             self.logger.log(
                 logging.getLevelNamesMapping()[self.err_level],
                 '%s raised %s',
@@ -81,52 +80,52 @@ class ExitContext[** Params, Return](
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AsyncEnterContext[** Params, Return](
     EnterContext[Params, Return],
-    _base.AsyncEnterContext[Params, Return],
+    base.AsyncEnterContext[Params, Return],
 ):
     async def __call__(
         self,
         *args: Params.args,
         **kwargs: Params.kwargs
-    ) -> tuple[AsyncExitContext[Params, Return], _base.AsyncEnterContext[Params, Return]] | Return:
+    ) -> tuple[AsyncExitContext[Params, Return], base.AsyncEnterContext[Params, Return]] | Return:
         return super().__call__(*args, **kwargs)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MultiEnterContext[** Params, Return](
     EnterContext[Params, Return],
-    _base.MultiEnterContext[Params, Return],
+    base.MultiEnterContext[Params, Return],
 ):
 
     def __call__(
         self,
         *args: Params.args,
         **kwargs: Params.kwargs
-    ) -> tuple[MultiExitContext[Params, Return], _base.MultiEnterContext[Params, Return]] | Return:
+    ) -> tuple[MultiExitContext[Params, Return], base.MultiEnterContext[Params, Return]] | Return:
         return super().__call__(*args, **kwargs)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AsyncExitContext[** Params, Return](
     ExitContext[Params, Return],
-    _base.AsyncExitContext[Params, Return],
+    base.AsyncExitContext[Params, Return],
 ):
 
-    async def __call__(self, result: _base.Raise | Return) -> _base.Raise | Return:
+    async def __call__(self, result: base.Raise | Return) -> base.Raise | Return:
         return super().__call__(result)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MultiExitContext[** Params, Return](
     ExitContext[Params, Return],
-    _base.MultiExitContext[Params, Return],
+    base.MultiExitContext[Params, Return],
 ):
 
-    def __call__(self, result: _base.Raise | Return) -> _base.Raise | Return:
+    def __call__(self, result: base.Raise | Return) -> base.Raise | Return:
         return super().__call__(result)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](_base.Decorator[Params, Return]):
+class Decorator[** Params, Return](base.Decorator[Params, Return]):
     call_level: Level = 'DEBUG'
     err_level: Level = 'ERROR'
     logger: logging.Logger = ...
@@ -134,15 +133,15 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
 
     def __call__(
         self,
-        decoratee: _base.Decoratee[Params, Return] | _base.Decorated[Params, Return],
+        decoratee: base.Decoratee[Params, Return] | base.Decorated[Params, Return],
         /,
-    ) -> _base.Decorated[Params, Return]:
+    ) -> base.Decorated[Params, Return]:
         decoratee = super().__call__(decoratee)
 
         match decoratee:
-            case _base.AsyncDecorated():
+            case base.AsyncDecorated():
                 enter_context_t = AsyncEnterContext[Params, Return]
-            case _base.MultiDecorated():
+            case base.MultiDecorated():
                 enter_context_t = MultiEnterContext[Params, Return]
             case _: assert False, 'Unreachable'  # pragma: no cover
 

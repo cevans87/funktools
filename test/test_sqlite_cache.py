@@ -6,7 +6,7 @@ import pytest
 
 import funktools
 
-module = inspect.getmodule(funktools.SQLiteCache)
+module = inspect.getmodule(funktools.SqliteCache)
 
 # TODO: Multi tests are missing. This suite heavily relies upon determining whether coroutines are running vs suspended
 #  (via asyncio.eager_task_factory). Ideally, similar functionality exists for threading. Otherwise, we need to find a
@@ -37,7 +37,7 @@ def db_path() -> str:
 async def test_async_zero_args(db_path: str) -> None:
     call_count = 0
 
-    @funktools.SQLiteCache()
+    @funktools.SqliteCache()
     async def foo() -> None:
         nonlocal call_count
         call_count += 1
@@ -50,7 +50,7 @@ async def test_async_zero_args(db_path: str) -> None:
 def test_multi_zero_args(db_path: str) -> None:
     call_count = 0
 
-    @funktools.SQLiteCache()
+    @funktools.SqliteCache()
     def foo() -> None:
         nonlocal call_count
         call_count += 1
@@ -65,7 +65,7 @@ def test_multi_zero_args(db_path: str) -> None:
 async def test_async_primitive_arg(db_path, arg) -> None:
     call_count = 0
 
-    @funktools.SQLiteCache(db_path=db_path)
+    @funktools.SqliteCache(db_path=db_path)
     async def foo(_) -> None:
         nonlocal call_count
         call_count += 1
@@ -79,7 +79,7 @@ async def test_async_primitive_arg(db_path, arg) -> None:
 def test_multi_primitive_arg(db_path, arg) -> None:
     call_count = 0
 
-    @funktools.SQLiteCache(db_path=db_path)
+    @funktools.SqliteCache(db_path=db_path)
     def foo(_) -> None:
         nonlocal call_count
         call_count += 1
@@ -94,7 +94,7 @@ async def test_async_method() -> None:
     call_count = 0
 
     class Foo:
-        @funktools.SQLiteCache()
+        @funktools.SqliteCache()
         async def foo(self) -> None:
             nonlocal call_count
             call_count += 1
@@ -113,7 +113,7 @@ def test_multi_method() -> None:
     call_count = 0
 
     class Foo:
-        @funktools.SQLiteCache()
+        @funktools.SqliteCache()
         def foo(self) -> None:
             nonlocal call_count
             call_count += 1
@@ -134,7 +134,7 @@ async def test_async_classmethod() -> None:
 
     class Foo:
         @classmethod
-        @funktools.SQLiteCache()
+        @funktools.SqliteCache()
         async def foo(cls) -> None:
             nonlocal call_count
             call_count += 1
@@ -158,7 +158,7 @@ def test_multi_classmethod() -> None:
 
     class Foo:
         @classmethod
-        @funktools.SQLiteCache()
+        @funktools.SqliteCache()
         def foo(cls) -> None:
             nonlocal call_count
             call_count += 1
@@ -183,7 +183,7 @@ async def test_async_staticmethod() -> None:
 
     class Foo:
         @staticmethod
-        @funktools.SQLiteCache()
+        @funktools.SqliteCache()
         async def foo() -> None:
             nonlocal call_count
             call_count += 1
@@ -207,7 +207,7 @@ def test_multi_staticmethod() -> None:
 
     class Foo:
         @staticmethod
-        @funktools.SQLiteCache()
+        @funktools.SqliteCache()
         def foo() -> None:
             nonlocal call_count
             call_count += 1

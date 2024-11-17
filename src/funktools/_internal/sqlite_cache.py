@@ -7,13 +7,12 @@ import asyncio
 import collections
 import dataclasses
 import pathlib
+import sqlite3
 import textwrap
 import threading
 import typing
 
-import sqlite3
-
-from . import _base
+from . import base
 
 type Key = str
 
@@ -24,7 +23,7 @@ type DumpsValue[Return] = typing.Callable[[Return], bytes]
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class EnterContext[** Params, Return](
-    _base.EnterContext[Params, Return],
+    base.EnterContext[Params, Return],
     abc.ABC,
 ):
     connection: sqlite3.Connection
@@ -77,7 +76,7 @@ class EnterContext[** Params, Return](
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ExitContext[** Params, Return](
-    _base.ExitContext[Params, Return],
+    base.ExitContext[Params, Return],
     abc.ABC,
 ):
     connection: sqlite3.Connection
@@ -88,11 +87,11 @@ class ExitContext[** Params, Return](
     @abc.abstractmethod
     def __call__(
         self: AsyncExitContext[Params, Return] | MultiExitContext[Params, Return],
-        result: _base.Raise | Return,
+        result: base.Raise | Return,
     ) -> Return:
 
         try:
-            if isinstance(result, _base.Raise):
+            if isinstance(result, base.Raise):
                 raise result.e
             else:
                 self.connection.execute(
@@ -107,7 +106,7 @@ class ExitContext[** Params, Return](
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AsyncEnterContext[** Params, Return](
     EnterContext[Params, Return],
-    _base.AsyncEnterContext[Params, Return],
+    base.AsyncEnterContext[Params, Return],
 ):
     exit_context_by_key: collections.OrderedDict[Key, AsyncExitContext[Params, Return]] = dataclasses.field(
         default_factory=collections.OrderedDict
@@ -118,7 +117,7 @@ class AsyncEnterContext[** Params, Return](
         self,
         *args: Params.args,
         **kwargs: Params.kwargs,
-    ) -> (AsyncExitContext[Params, Return], _base.AsyncEnterContext[Params, Return]) | Return:
+    ) -> (AsyncExitContext[Params, Return], base.AsyncEnterContext[Params, Return]) | Return:
         key = self.dumps_key(*args, **kwargs)
         async with self.lock:
             if (exit_context := self.exit_context_by_key.get(key)) is not None:
@@ -135,7 +134,7 @@ class AsyncEnterContext[** Params, Return](
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MultiEnterContext[** Params, Return](
     EnterContext[Params, Return],
-    _base.MultiEnterContext[Params, Return],
+    base.MultiEnterContext[Params, Return],
 ):
     exit_context_by_key: collections.OrderedDict[Key, MultiExitContext[Params, Return]] = dataclasses.field(
         default_factory=collections.OrderedDict
@@ -150,7 +149,7 @@ class MultiEnterContext[** Params, Return](
         self,
         *args: Params.args,
         **kwargs: Params.kwargs,
-    ) -> (MultiExitContext[Params, Return], _base.MultiEnterContext[Params, Return]) | Return:
+    ) -> (MultiExitContext[Params, Return], base.MultiEnterContext[Params, Return]) | Return:
         key = self.dumps_key(*args, **kwargs)
         with self.lock:
             if (exit_context := self.exit_context_by_key.get(key)) is not None:
@@ -167,27 +166,27 @@ class MultiEnterContext[** Params, Return](
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AsyncExitContext[** Params, Return](
     ExitContext[Params, Return],
-    _base.AsyncExitContext[Params, Return],
+    base.AsyncExitContext[Params, Return],
 ):
     event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
 
-    async def __call__(self, result: _base.Raise | Return) -> Return:
+    async def __call__(self, result: base.Raise | Return) -> Return:
         return super().__call__(result)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MultiExitContext[** Params, Return](
     ExitContext[Params, Return],
-    _base.MultiExitContext[Params, Return],
+    base.MultiExitContext[Params, Return],
 ):
     event: threading.Event = dataclasses.field(default_factory=threading.Event)
 
-    def __call__(self, result: _base.Raise | Return) -> Return:
+    def __call__(self, result: base.Raise | Return) -> Return:
         return super().__call__(result)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](_base.Decorator[Params, Return]):
+class Decorator[** Params, Return](base.Decorator[Params, Return]):
     db_path: pathlib.Path | str = 'file::memory:?cache=shared'
     dumps_key: DumpsKey = ...
     dumps_value: DumpsValue[Return] = repr
@@ -196,9 +195,9 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
 
     def __call__(
         self,
-        decoratee: _base.Decoratee[Params, Return] | _base.Decorated[Params, Return],
+        decoratee: base.Decoratee[Params, Return] | base.Decorated[Params, Return],
         /,
-    ) -> _base.Decorated[Params, Return]:
+    ) -> base.Decorated[Params, Return]:
         decoratee = super().__call__(decoratee)
 
         if (dumps_key := self.dumps_key) is ...:
@@ -208,9 +207,9 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
                 return repr((bound.args, tuple(sorted(bound.kwargs))))
 
         match decoratee:
-            case _base.AsyncDecorated():
+            case base.AsyncDecorated():
                 enter_context_t = AsyncEnterContext
-            case _base.MultiDecorated():
+            case base.MultiDecorated():
                 enter_context_t = MultiEnterContext
             case _: assert False, 'Unreachable'  # pragma: no cover
 

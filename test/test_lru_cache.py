@@ -6,7 +6,7 @@ import pytest
 
 import funktools
 
-module = inspect.getmodule(funktools.LRUCache)
+module = inspect.getmodule(funktools.LruCache)
 
 # TODO: Multi tests are missing. This suite heavily relies upon determining whether coroutines are running vs suspended
 #  (via asyncio.eager_task_factory). Ideally, similar functionality exists for threading. Otherwise, we need to find a
@@ -49,7 +49,7 @@ def m_time() -> unittest.mock.MagicMock:
 async def test_async_zero_args() -> None:
     call_count = 0
 
-    @funktools.LRUCache()
+    @funktools.LruCache()
     async def foo() -> None:
         nonlocal call_count
         call_count += 1
@@ -64,7 +64,7 @@ async def test_async_zero_args() -> None:
 async def test_async_primitive_arg(arg) -> None:
     call_count = 0
 
-    @funktools.LRUCache()
+    @funktools.LruCache()
     async def foo(_) -> int:
         nonlocal call_count
         call_count += 1
@@ -80,7 +80,7 @@ async def test_method() -> None:
     call_count = 0
 
     class Foo:
-        @funktools.LRUCache()
+        @funktools.LruCache()
         async def foo(self) -> int:
             nonlocal call_count
             call_count += 1
@@ -102,7 +102,7 @@ async def test_async_classmethod() -> None:
 
     class Foo:
         @classmethod
-        @funktools.LRUCache()
+        @funktools.LruCache()
         async def foo(cls) -> None:
             nonlocal call_count
             call_count += 1
@@ -126,7 +126,7 @@ def test_multi_classmethod() -> None:
 
     class Foo:
         @classmethod
-        @funktools.LRUCache()
+        @funktools.LruCache()
         def foo(cls) -> None:
             nonlocal call_count
             call_count += 1
@@ -151,7 +151,7 @@ async def test_async_size_expires_memos() -> None:
 
     class Foo:
 
-        @funktools.LRUCache(size=1)
+        @funktools.LruCache(size=1)
         async def foo(self, _) -> None:
             nonlocal call_count
             call_count += 1
@@ -169,7 +169,7 @@ async def test_async_size_method_is_per_instance() -> None:
 
     class Foo:
 
-        @funktools.LRUCache(size=1)
+        @funktools.LruCache(size=1)
         async def foo(self, _) -> None:
             nonlocal call_count
             call_count += 1
@@ -205,7 +205,7 @@ async def test_async_size_classmethod_is_per_class() -> None:
     class Foo:
 
         @classmethod
-        @funktools.LRUCache(size=1)
+        @funktools.LruCache(size=1)
         async def foo(cls, _) -> None:
             nonlocal call_count
             call_count += 1
@@ -241,7 +241,7 @@ async def test_async_size_staticmethod_is_per_declaration() -> None:
     class Foo:
 
         @staticmethod
-        @funktools.LRUCache(size=1)
+        @funktools.LruCache(size=1)
         async def foo(_) -> None:
             nonlocal call_count
             call_count += 1
@@ -275,7 +275,7 @@ async def test_herds_only_call_once() -> None:
     call_count = 0
     event = asyncio.Event()
 
-    @funktools.LRUCache()
+    @funktools.LruCache()
     async def foo() -> None:
         nonlocal call_count
         await event.wait()
@@ -295,7 +295,7 @@ async def test_async_exceptions_are_saved() -> None:
     class FooException(Exception):
         ...
 
-    @funktools.LRUCache()
+    @funktools.LruCache()
     async def foo() -> None:
         nonlocal call_count
         call_count += 1
@@ -316,7 +316,7 @@ def test_multi_exceptions_are_saved() -> None:
     class FooException(Exception):
         ...
 
-    @funktools.LRUCache()
+    @funktools.LruCache()
     def foo() -> None:
         nonlocal call_count
         call_count += 1

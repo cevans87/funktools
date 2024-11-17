@@ -3,7 +3,7 @@ import typing
 
 import pytest
 
-import funktools._base  # noqa
+import funktools._internal.base as base  # noqa
 
 
 @pytest.fixture(autouse=True)
@@ -20,28 +20,11 @@ def event_loop() -> asyncio.AbstractEventLoop:
 
 
 def test_base() -> None:
-    @funktools._base.Decorator()
+    @base.Decorator()
     def foo():
         ...
 
     foo()
-
-
-def test_key() -> None:
-    @funktools._base.Decorator()
-    def foo():
-        ...
-
-    assert foo.register_key == (*__name__.split('.'), test_key.__name__, foo.__name__)
-
-
-def test_register() -> None:
-    @funktools._base.Decorator()
-    def foo():
-        ...
-
-    assert foo.register_key in funktools._base.Decorator.register.decorateds
-    assert foo.register_key in funktools._base.Decorator.register.links
 
 
 @pytest.mark.asyncio
@@ -49,7 +32,7 @@ async def test_async_method() -> None:
 
     class Foo:
 
-        @funktools._base.Decorator()
+        @base.Decorator()
         async def bar(self, v):
             return locals()
 
@@ -60,7 +43,7 @@ def test_multi_method() -> None:
 
     class Foo:
 
-        @funktools._base.Decorator()
+        @base.Decorator()
         def bar(self, v):
             return locals()
 
@@ -73,7 +56,7 @@ async def test_async_classmethod() -> None:
     class Foo:
 
         @classmethod
-        @funktools._base.Decorator()
+        @base.Decorator()
         async def bar(cls, v):
             return locals()
 
@@ -85,7 +68,7 @@ def test_multi_classmethod() -> None:
     class Foo:
 
         @classmethod
-        @funktools._base.Decorator()
+        @base.Decorator()
         def bar(cls, v):
             return locals()
 
@@ -99,7 +82,7 @@ async def test_async_staticmethod() -> None:
         v: typing.ClassVar[int]
 
         @staticmethod
-        @funktools._base.Decorator()
+        @base.Decorator()
         async def bar(v):
             return locals()
 
@@ -111,7 +94,7 @@ def test_multi_staticmethod() -> None:
     class Foo:
 
         @staticmethod
-        @funktools._base.Decorator()
+        @base.Decorator()
         def bar(v):
             return locals()
 

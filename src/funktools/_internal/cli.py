@@ -58,9 +58,7 @@ import sys
 import types
 import typing
 
-from pygments.lexer import default
-
-from . import _base
+from . import base
 
 
 class _Exception(Exception):
@@ -277,7 +275,12 @@ _Help = typing.Annotated[bool, 'Show this help text and exit.']
 _LogLevelInt = typing.Annotated[int, annotated_types.Interval(ge=10, le=60)]
 _LogLevelStr = typing.Literal['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'NOTSET']
 _LogLevel = _LogLevelInt | _LogLevelStr
-_Subcommand
+_SubCommand = typing.Literal
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class _Flag:
+    ...
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class _Annotated:
@@ -358,18 +361,6 @@ class _Annotated:
         ]
 
     @staticmethod
-    def subcommand(subcommands: list[_base.Decoratee]):
-        # TODO: Finish this. It should decorate the subcommands if they're not already decorated.
-
-        # register the subcommands in the current namespace.
-
-        return typing.Annotated[
-            _Subcommand,
-            _AddArgument[_Subcommand](name_or_flags=['subcommand']),
-            _SideEffect[_LogLevelStr](lambda subcommand: logger.setLevel(log_level))
-        ]
-
-    @staticmethod
     def verbose(logger_or_name: logging.Logger | str, /) -> type[_LogLevelInt]:
         logger = logger_or_name if isinstance(logger_or_name, logging.Logger) else logging.getLogger(logger_or_name)
 
@@ -402,7 +393,7 @@ class ArgumentParser[** Params, Return](argparse.ArgumentParser):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](_base.Decorator[Params, Return]):
+class Decorator[** Params, Return](base.Decorator[Params, Return]):
     """Decorate a function, adding `.cli` attribute.
 
     The `.cli.run` function parses command line arguments (e.g. `sys.argv[1:]`) and executes the decorated function with
@@ -442,34 +433,36 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
             generated for each submodule top-level function with name matching decorated entrypoint name.
     """
 
-    register: typing.ClassVar[_base.Register] = _base.Register()
+    flags: tuple[_Flag, ...] = tuple()
+
+    register: typing.ClassVar[base.Register] = base.Register()
 
     AddArgument: typing.ClassVar = _AddArgument
     Annotated: typing.ClassVar = _Annotated
     Exception: typing.ClassVar = _Exception
-    type Key = str | _base.Register.Key | _base.Decorated | _base.Decoratee
+    type Key = str | base.Register.Key | base.Decorated | base.Decoratee
 
     def __call__(
         self,
-        decoratee: _base.Decoratee[Params, Return] | _base.Decorated[Params, Return],
+        decoratee: base.Decoratee[Params, Return] | base.Decorated[Params, Return],
         /,
-    ) -> _base.Decorated[Params, Return]:
+    ) -> base.Decorated[Params, Return]:
         decoratee = super().__call__(decoratee)
 
         # We really do intend to return the decoratee here. The only point of CLI is to register the decoratee. We don't
         # make a parser unless asked via CLI().get_argument_parser() or run unless asked via CLI().main().
         return decoratee
 
-    def gen_decorated(self, key: Key) -> _base.Decorated[Params, Return]:
+    def gen_decorated(self, key: Key) -> base.Decorated[Params, Return]:
         match key:
             case str(name):
-                register_key = _base.Register.Key([*re.sub(r'.<.*>', '', name).split('.')])
+                register_key = base.Register.Key([*re.sub(r'.<.*>', '', name).split('.')])
             case tuple(register_key):
                 ...
-            case _base.Decorated() as decorated:
+            case base.Decorated() as decorated:
                 register_key = decorated.register_key
-            case _base.Decoratee() as decoratee:
-                register_key = _base.Register.Key([
+            case base.Decoratee() as decoratee:
+                register_key = base.Register.Key([
                     *re.sub(r'.<.*>', '', '.'.join([decoratee.__module__, decoratee.__qualname__])).split('.')
                 ])
             case _: assert False, 'Unreachable'  # pragma: no cover
@@ -514,22 +507,22 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
 
     def run(
         self,
-        decorated_or_key: _base.Decorated | _base.Register.Key | str,
+        decorated_or_key: base.Decorated | base.Register.Key | str,
         args: typing.Sequence[str] = ...,
     ) -> None:
         match decorated_or_key:
             case str():
-                register_key = _base.Register.Key([*re.sub(r'.<.*>', '', decorated_or_key).split('.')])
-            case _base.Decorated():
+                register_key = base.Register.Key([*re.sub(r'.<.*>', '', decorated_or_key).split('.')])
+            case base.Decorated():
                 register_key = decorated_or_key.register_key
             case tuple():
-                register_key = _base.Register.Key(decorated_or_key)
+                register_key = base.Register.Key(decorated_or_key)
             case _: assert False, 'Unreachable'
 
         args = sys.argv[1:] if args is ... else args
 
-        while args and (_base.Register.Key([*register_key, args[0]]) in self.register.links):
-            register_key = _base.Register.Key([*register_key, args.pop(0)])
+        while args and (base.Register.Key([*register_key, args[0]]) in self.register.links):
+            register_key = base.Register.Key([*register_key, args.pop(0)])
 
         argument_parser = self.get_argument_parser(register_key)
         argument_parser.parse_known_intermixed_args(args)
@@ -584,8 +577,8 @@ class Decorator[** Params, Return](_base.Decorator[Params, Return]):
 
         return_ = decorated(*args, **kwargs)
         match decorated:
-            case _base.AsyncDecorated():
+            case base.AsyncDecorated():
                 return asyncio.run(return_)
-            case _base.MultiDecorated():
+            case base.MultiDecorated():
                 return return_
             case _: assert False, 'Unreachable'
