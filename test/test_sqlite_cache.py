@@ -1,12 +1,9 @@
 import asyncio
-import inspect
 import tempfile
 
 import pytest
 
 import funktools
-
-module = inspect.getmodule(funktools.SqliteCache)
 
 # TODO: Multi tests are missing. This suite heavily relies upon determining whether coroutines are running vs suspended
 #  (via asyncio.eager_task_factory). Ideally, similar functionality exists for threading. Otherwise, we need to find a

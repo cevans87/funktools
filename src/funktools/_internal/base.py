@@ -19,207 +19,154 @@ class Raise:
 
 
 @typing.runtime_checkable
-class AsyncDecoratee[** Params, Return](typing.Protocol):
-    async def __call__(*args: Params.args, **kwargs: Params.kwargs) -> Return: ...
+class AsyncDecoratee[** Param, Ret](typing.Protocol):
+    async def __call__(*args: Param.args, **kwargs: Param.kwargs) -> Ret: ...
 
 
 @typing.runtime_checkable
-class MultiDecoratee[** Params, Return](typing.Protocol):
-    def __call__(*args: Params.args, **kwargs: Params.kwargs) -> Return: ...
+class MultiDecoratee[** Param, Ret](typing.Protocol):
+    def __call__(*args: Param.args, **kwargs: Param.kwargs) -> Ret: ...
 
 
 @typing.runtime_checkable
-class Decoratee[** Params, Return](typing.Protocol):
-    def __call__(*args: Params.args, **kwargs: Params.kwargs) -> typing.Awaitable[Return] | Return: ...
+class Decoratee[** Param, Ret](typing.Protocol):
+    def __call__(*args: Param.args, **kwargs: Param.kwargs) -> typing.Awaitable[Ret] | Ret: ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Base[** Params, Return](abc.ABC):
-    decoratee: Decoratee[Params, Return]
-    instance: Instance | None
+class Base[** Param, Ret](abc.ABC):
+    decoratee: Decoratee[Param, Ret]
 
     @property
-    def async_enter_context_t(self) -> type[AsyncEnterContext[Params, Return]]:
-        return inspect.getmodule(type(self)).AsyncEnterContext
+    def async_enter_t(self) -> type[AsyncEnter[Param, Ret]]:
+        return inspect.getmodule(type(self)).AsyncEnter
 
     @property
-    def async_exit_context_t(self) -> type[AsyncExitContext[Params, Return]]:
-        return inspect.getmodule(type(self)).AsyncExitContext
+    def multi_enter_t(self) -> type[MultiEnter[Param, Ret]]:
+        return inspect.getmodule(type(self)).MultiEnter
 
     @property
-    def async_decorated_t(self) -> type[AsyncDecorated[Params, Return]]:
+    def async_exit_t(self) -> type[AsyncExit[Param, Ret]]:
+        return inspect.getmodule(type(self)).AsyncExit
+
+    @property
+    def multi_exit_t(self) -> type[MultiExit[Param, Ret]]:
+        return inspect.getmodule(type(self)).MultiExit
+
+    @property
+    def async_decorated_t(self) -> type[AsyncDecorated[Param, Ret]]:
         return inspect.getmodule(type(self)).AsyncDecorated
 
     @property
-    def multi_enter_context_t(self) -> type[MultiEnterContext[Params, Return]]:
-        return inspect.getmodule(type(self)).MultiEnterContext
-
-    @property
-    def multi_exit_context_t(self) -> type[MultiExitContext[Params, Return]]:
-        return inspect.getmodule(type(self)).MultiExitContext
-
-    @property
-    def multi_decorated_t(self) -> type[MultiDecorated[Params, Return]]:
+    def multi_decorated_t(self) -> type[MultiDecorated[Param, Ret]]:
         return inspect.getmodule(type(self)).MultiDecorated
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncBase[** Params, Return](Base[Params, Return], abc.ABC):
+class Async[** Param, Ret](Base[Param, Ret], abc.ABC):
 
     @property
-    def enter_context_t(self) -> type[AsyncEnterContext[Params, Return]]:
-        return self.async_enter_context_t
+    def enter_t(self) -> type[AsyncEnter[Param, Ret]]:
+        return self.async_enter_t
 
     @property
-    def exit_context_t(self) -> type[AsyncExitContext[Params, Return]]:
-        return self.async_exit_context_t
+    def exit_t(self) -> type[AsyncExit[Param, Ret]]:
+        return self.async_exit_t
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiBase[** Params, Return](Base[Params, Return], abc.ABC):
+class Multi[** Param, Ret](Base[Param, Ret], abc.ABC):
 
     @property
-    def enter_context_t(self) -> type[MultiEnterContext[Params, Return]]:
-        return self.multi_enter_context_t
+    def enter_t(self) -> type[MultiEnter[Param, Ret]]:
+        return self.multi_enter_t
 
     @property
-    def exit_context_t(self) -> type[MultiExitContext[Params, Return]]:
-        return self.multi_exit_context_t
+    def exit_t(self) -> type[MultiExit[Param, Ret]]:
+        return self.multi_exit_t
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Context[** Params, Return](Base[Params, Return], abc.ABC):
+class Context[** Param, Ret](Base[Param, Ret], abc.ABC):
+    args: Param.args
+    kwargs: Param.kwargs
 
+    @property
     @abc.abstractmethod
-    @property
-    def enter_context_t(self) -> type[EnterContext[Params, Return]]: ...
+    def enter_t(self) -> type[Enter[Param, Ret]]: ...
 
+    @property
     @abc.abstractmethod
-    @property
-    def exit_context_t(self) -> type[ExitContext[Params, Return]]: ...
+    def exit_t(self) -> type[Exit[Param, Ret]]: ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncContext[** Params, Return](Context[Params, Return], AsyncBase[Params, Return], abc.ABC): ...
+class Enter[** Param, Ret](Context[Param, Ret], abc.ABC): ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiContext[** Params, Return](Context[Params, Return], MultiBase[Params, Return], abc.ABC): ...
+class Exit[** Param, Ret](Context[Param, Ret], abc.ABC):
+
+    def __call__(self, ret: Ret) -> typing.Generator[object, object, Ret]:
+        return ret
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class EnterContext[** Params, Return](Context[Params, Return], abc.ABC): ...
+class AsyncEnter[** Param, Ret](Async[Param, Ret], Enter[Param, Ret], abc.ABC):
 
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class ExitContext[** Params, Return](Context[Params, Return], abc.ABC): ...
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncEnterContext[** Params, Return](AsyncContext[Params, Return], EnterContext[Params, Return], abc.ABC):
-
-    @property
-    def context_t(self) -> type[AsyncEnterContext[Params, Return]]:
-        return self.async_enter_context_t
-
-    async def __call__(self, *args: Params.args, **kwargs: Params.kwargs) -> tuple[AsyncDecoratee[Params, Return]]:
+    async def __call__(self) -> tuple[Decoratee[Param, Ret]]:
         return tuple([self.decoratee])
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiEnterContext[** Params, Return](MultiContext[Params, Return], EnterContext[Params, Return], abc.ABC):
+class MultiEnter[** Param, Ret](Multi[Param, Ret], Enter[Param, Ret], abc.ABC):
 
-    @property
-    def context_t(self) -> type[MultiEnterContext[Params, Return]]:
-        return self.multi_enter_context_t
-
-    def __call__(self, *args: Params.args, **kwargs: Params.kwargs) -> tuple[MultiDecoratee[Params, Return]]:
+    def __call__(self) -> tuple[Decoratee[Param, Ret]]:
         return tuple([self.decoratee])
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncExitContext[** Params, Return](AsyncContext[Params, Return], ExitContext[Params, Return], abc.ABC):
+class AsyncExit[** Param, Ret](Async[Param, Ret], Exit[Param, Ret], abc.ABC):
 
-    @property
-    def context_t(self) -> type[AsyncExitContext[Params, Return]]:
-        return self.async_exit_context_t
-
-    async def __call__(self, _return: Return | Raise) -> tuple[()]:
+    async def __call__(self, ret: Ret) -> tuple[()]:
         return tuple()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiExitContext[** Params, Return](MultiContext[Params, Return], ExitContext[Params, Return], abc.ABC):
+class MultiExit[** Param, Ret](Multi[Param, Ret], Exit[Param, Ret], abc.ABC):
 
-    @property
-    def context_t(self) -> type[MultiExitContext[Params, Return]]:
-        return self.multi_exit_context_t
-
-    def __call__(self, _return: Return | Raise) -> tuple[()]:
+    def __call__(self, ret: Ret) -> tuple[()]:
         return tuple()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorated[** Params, Return](Context[Params, Return], abc.ABC):
-    signature: inspect.Signature
+class Decorated[** Param, Ret](Base[Param, Ret], abc.ABC):
     __doc__: str
     __module__: str
     __name__: str
     __qualname__: str
 
-    @abc.abstractmethod
-    @property
-    def enter_context_t(self) -> type[EnterContext[Params, Return]]: ...
-
-    @typing.overload
-    async def __call__(self: AsyncDecorated[Params, Return], *args: Params.args, **kwargs: Params.kwargs) -> Return: ...
-
-    @typing.overload
-    def __call__(self: MultiDecorated[Params, Return], *args: Params.args, **kwargs: Params.kwargs) -> Return: ...
-
-    @abc.abstractmethod
-    def __call__(self): ...
-
     def __get__(self, instance: Instance, owner) -> typing.Self:
-        return dataclasses.replace(self, instance=instance)
+        return dataclasses.replace(self, decoratee=self.decoratee.__get__(instance, owner))
 
-    @staticmethod
-    def norm_kwargs(kwargs: Params.kwargs) -> Params.kwargs:
-        return dict(sorted(kwargs.items()))
-
-    def norm_args(self, args: Params.args) -> Params.args:
-        return args if self.instance is None else [self.instance, *args]
-
-    def to_enter_context(self) -> EnterContext[Params, Return]:
-        return self.enter_context_t(decoratee=self.decoratee, instance=self.instance)
-
+    def to_enter(self, *args: Param.args, **kwargs: Param.kwargs) -> Enter[Param, Ret]:
+        return self.enter_t(args=args, decoratee=self.decoratee, kwargs=kwargs)
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncDecorated[** Params, Return](
-    Decorated[Params, Return],
-    AsyncEnterContext[Params, Return],
-    AsyncExitContext[Params, Return],
-    abc.ABC,
-):
+class AsyncDecorated[** Param, Ret](Async[Param, Ret], Decorated[Param, Ret], abc.ABC):
 
-    @property
-    def enter_context_t(self) -> type[AsyncEnterContext[Params, Return]]:
-        return inspect.getmodule(type(self)).AsyncEnterContext
-
-    async def __call__(self, *args: Params.args, **kwargs: Params.kwargs) -> Return:
-        args, kwargs = self.norm_args(args), self.norm_kwargs(kwargs)
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> Ret:
+        result: Raise | Ret = ...
         stack = [self]
-        result: Raise | Return = ...
-
         while stack:
             try:
                 match stack.pop():
                     case Decorated() as decorated:
-                        stack.append(decorated.to_enter_context())
-                    case EnterContext() as enter_context:
-                        stack.extend(await enter_context(*args, **kwargs))
-                    case ExitContext() as exit_context:
-                        stack.extend(await exit_context(result))
+                        stack.append(decorated.to_enter(*args, **kwargs))
+                    case Enter() as enter:
+                        stack.extend(await enter())
+                    case Exit() as exit_:
+                        stack.extend(await exit_(result))
                     case Decoratee() as decoratee:
                         result = await decoratee(*args, **kwargs)
             except Exception:  # noqa
@@ -232,31 +179,20 @@ class AsyncDecorated[** Params, Return](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiDecorated[** Params, Return](
-    Decorated[Params, Return],
-    MultiEnterContext[Params, Return],
-    MultiExitContext[Params, Return],
-    abc.ABC,
-):
+class MultiDecorated[** Param, Ret](Multi[Param, Ret], Decorated[Param, Ret], abc.ABC):
 
-    @property
-    def enter_context_t(self) -> type[MultiEnterContext[Params, Return]]:
-        return inspect.getmodule(type(self)).MultiEnterContext
-
-    def __call__(self, *args: Params.args, **kwargs: Params.kwargs) -> Return:
-        args, kwargs = self.norm_args(args), self.norm_kwargs(kwargs)
-        stack = [self.decoratee]
-        result: Raise | Return = ...
-
+    def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> Ret:
+        result: Raise | Ret = ...
+        stack = [self]
         while stack:
             try:
                 match stack.pop():
                     case Decorated() as decorated:
-                        stack.append(decorated.enter_context_t(**dataclasses.asdict(decorated)))
-                    case EnterContext() as enter_context:
-                        stack.extend(enter_context(*args, **kwargs))
-                    case ExitContext() as exit_context:
-                        stack.extend(exit_context(result))
+                        stack.append(decorated.to_enter(*args, **kwargs))
+                    case Enter() as enter:
+                        stack.extend(enter())
+                    case Exit() as exit_:
+                        stack.extend(exit_(result))
                     case Decoratee() as decoratee:
                         result = decoratee(*args, **kwargs)
             except Exception:  # noqa
@@ -269,27 +205,20 @@ class MultiDecorated[** Params, Return](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](abc.ABC):
+class Decorator[** Param, Ret](abc.ABC):
 
-    def __call__(
-        self,
-        decoratee: Decoratee[Params, Return],
-        /,
-    ) -> Decorated[Params, Return]:
+    def __call__(self, decoratee: Decoratee[Param, Ret], /) -> Decorated[Param, Ret]:
         if inspect.iscoroutinefunction(decoratee):
-            decorated_t: Decorated[Params, Return] = inspect.getmodule(type(self)).AsyncDecorated
+            decorated_t: AsyncDecorated[Param, Ret] = inspect.getmodule(type(self)).AsyncDecorated
         else:
-            decorated_t: Decorated[Params, Return] = inspect.getmodule(type(self)).MultiDecorated
+            decorated_t: MultiDecorated[Param, Ret] = inspect.getmodule(type(self)).MultiDecorated
 
         decorated = decorated_t(
                 decoratee=decoratee,
-                instance=None,
-                signature=inspect.signature(decoratee),
                 __doc__=str(decoratee.__doc__),
                 __module__=str(decoratee.__module__),
                 __name__=str(decoratee.__name__),
                 __qualname__=str(decoratee.__qualname__),
-                **dataclasses.asdict(self),  # noqa
         )
 
         return decorated

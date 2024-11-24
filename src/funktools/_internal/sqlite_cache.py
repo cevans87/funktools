@@ -16,25 +16,36 @@ from . import base
 
 type Key = str
 
-type LoadsValue[Return] = typing.Callable[[bytes], Return]
-type DumpsKey[** Params] = typing.Callable[Params, Key]
-type DumpsValue[Return] = typing.Callable[[Return], bytes]
+type LoadsValue[Ret] = typing.Callable[[bytes], Ret]
+type DumpsKey[** Param] = typing.Callable[Param, Key]
+type DumpsValue[Ret] = typing.Callable[[Ret], bytes]
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class EnterContext[** Params, Return](
-    base.EnterContext[Params, Return],
-    abc.ABC,
-):
+class Base[** Param, Ret](base.Base[Param, Ret], abc.ABC): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Async[** Param, Ret](Base[Param, Ret], base.Async[Param, Ret], abc.ABC):
+    lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Multi[** Param, Ret](Base[Param, Ret], base.Multi[Param, Ret], abc.ABC):
+    lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Enter[** Param, Ret](base.Enter[Param, Ret], abc.ABC):
     connection: sqlite3.Connection
-    dumps_key: DumpsKey[Params]
-    dumps_value: DumpsValue[Return]
-    exit_context_by_key: collections.OrderedDict[Key, ExitContext[Params, Return]]
-    loads_value: LoadsValue[Return]
+    dumps_key: DumpsKey[Param]
+    dumps_value: DumpsValue[Ret]
+    exit_context_by_key: collections.OrderedDict[Key, ExitContext[Param, Ret]]
+    loads_value: LoadsValue[Ret]
     table_name: str
 
     def __post_init__(
-        self: AsyncEnterContext[Params, Return] | MultiEnterContext[Params, Return],
+        self: AsyncEnterContext[Param, Ret] | MultiEnterContext[Param, Ret],
     ) -> None:
         self.connection.execute(textwrap.dedent(f'''
             CREATE TABLE IF NOT EXISTS `{self.table_name}` (
@@ -44,7 +55,7 @@ class EnterContext[** Params, Return](
         ''').strip())
 
     def __call__(
-        self: AsyncEnterContext[Params, Return] | MultiEnterContext[Params, Return],
+        self: AsyncEnterContext[Param, Ret] | MultiEnterContext[Param, Ret],
         key: Key,
     ):
         match self.connection.execute(
@@ -75,20 +86,17 @@ class EnterContext[** Params, Return](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class ExitContext[** Params, Return](
-    base.ExitContext[Params, Return],
-    abc.ABC,
-):
+class Exit[** Param, Ret](base.Exit[Param, Ret], abc.ABC):
     connection: sqlite3.Connection
-    dumps_value: DumpsValue[Return]
+    dumps_value: DumpsValue[Ret]
     key: Key
     table_name: str
 
     @abc.abstractmethod
     def __call__(
-        self: AsyncExitContext[Params, Return] | MultiExitContext[Params, Return],
-        result: base.Raise | Return,
-    ) -> Return:
+        self: AsyncExitContext[Param, Ret] | MultiExitContext[Param, Ret],
+        result: base.Raise | Ret,
+    ) -> Ret:
 
         try:
             if isinstance(result, base.Raise):
@@ -104,20 +112,20 @@ class ExitContext[** Params, Return](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncEnterContext[** Params, Return](
-    EnterContext[Params, Return],
-    base.AsyncEnterContext[Params, Return],
+class AsyncEnterContext[** Param, Ret](
+    EnterContext[Param, Ret],
+    base.AsyncEnterContext[Param, Ret],
 ):
-    exit_context_by_key: collections.OrderedDict[Key, AsyncExitContext[Params, Return]] = dataclasses.field(
+    exit_context_by_key: collections.OrderedDict[Key, AsyncExitContext[Param, Ret]] = dataclasses.field(
         default_factory=collections.OrderedDict
     )
     lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
 
     async def __call__(
         self,
-        *args: Params.args,
-        **kwargs: Params.kwargs,
-    ) -> (AsyncExitContext[Params, Return], base.AsyncEnterContext[Params, Return]) | Return:
+        *args: Param.args,
+        **kwargs: Param.kwargs,
+    ) -> (AsyncExitContext[Param, Ret], base.AsyncEnterContext[Param, Ret]) | Ret:
         key = self.dumps_key(*args, **kwargs)
         async with self.lock:
             if (exit_context := self.exit_context_by_key.get(key)) is not None:
@@ -132,11 +140,11 @@ class AsyncEnterContext[** Params, Return](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiEnterContext[** Params, Return](
-    EnterContext[Params, Return],
-    base.MultiEnterContext[Params, Return],
+class MultiEnterContext[** Param, Ret](
+    EnterContext[Param, Ret],
+    base.MultiEnterContext[Param, Ret],
 ):
-    exit_context_by_key: collections.OrderedDict[Key, MultiExitContext[Params, Return]] = dataclasses.field(
+    exit_context_by_key: collections.OrderedDict[Key, MultiExitContext[Param, Ret]] = dataclasses.field(
         default_factory=collections.OrderedDict
     )
     lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
@@ -147,9 +155,9 @@ class MultiEnterContext[** Params, Return](
 
     def __call__(
         self,
-        *args: Params.args,
-        **kwargs: Params.kwargs,
-    ) -> (MultiExitContext[Params, Return], base.MultiEnterContext[Params, Return]) | Return:
+        *args: Param.args,
+        **kwargs: Param.kwargs,
+    ) -> (MultiExitContext[Param, Ret], base.MultiEnterContext[Param, Ret]) | Ret:
         key = self.dumps_key(*args, **kwargs)
         with self.lock:
             if (exit_context := self.exit_context_by_key.get(key)) is not None:
@@ -164,40 +172,40 @@ class MultiEnterContext[** Params, Return](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncExitContext[** Params, Return](
-    ExitContext[Params, Return],
-    base.AsyncExitContext[Params, Return],
+class AsyncExitContext[** Param, Ret](
+    ExitContext[Param, Ret],
+    base.AsyncExitContext[Param, Ret],
 ):
     event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
 
-    async def __call__(self, result: base.Raise | Return) -> Return:
+    async def __call__(self, result: base.Raise | Ret) -> Ret:
         return super().__call__(result)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiExitContext[** Params, Return](
-    ExitContext[Params, Return],
-    base.MultiExitContext[Params, Return],
+class MultiExitContext[** Param, Ret](
+    ExitContext[Param, Ret],
+    base.MultiExitContext[Param, Ret],
 ):
     event: threading.Event = dataclasses.field(default_factory=threading.Event)
 
-    def __call__(self, result: base.Raise | Return) -> Return:
+    def __call__(self, result: base.Raise | Ret) -> Ret:
         return super().__call__(result)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](base.Decorator[Params, Return]):
+class Decorator[** Param, Ret](base.Decorator[Param, Ret]):
     db_path: pathlib.Path | str = 'file::memory:?cache=shared'
     dumps_key: DumpsKey = ...
-    dumps_value: DumpsValue[Return] = repr
+    dumps_value: DumpsValue[Ret] = repr
     duration: typing.Annotated[float, annotated_types.Ge(0.0)] | None = None
-    loads_value: LoadsValue[Return] = ast.literal_eval
+    loads_value: LoadsValue[Ret] = ast.literal_eval
 
     def __call__(
         self,
-        decoratee: base.Decoratee[Params, Return] | base.Decorated[Params, Return],
+        decoratee: base.Decoratee[Param, Ret] | base.Decorated[Param, Ret],
         /,
-    ) -> base.Decorated[Params, Return]:
+    ) -> base.Decorated[Param, Ret]:
         decoratee = super().__call__(decoratee)
 
         if (dumps_key := self.dumps_key) is ...:

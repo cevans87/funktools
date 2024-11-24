@@ -199,13 +199,13 @@ async def test_async_size_method_is_per_instance() -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_size_classmethod_is_per_class() -> None:
+async def test_async_size_classmethod_is_per_declaration() -> None:
     call_count = 0
 
     class Foo:
 
         @classmethod
-        @funktools.LruCache(size=1)
+        @funktools.LruCache(size=3)
         async def foo(cls, _) -> None:
             nonlocal call_count
             call_count += 1
