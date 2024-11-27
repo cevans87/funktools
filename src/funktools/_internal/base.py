@@ -104,18 +104,7 @@ class Synchronous(Base, abc.ABC):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Exit[
-    ** Param,
-    Ret,
-    Decoratee,
-    Exit,
-    Enter,
-    Decorated,
-    Decorator,
-](
-    Base,
-    abc.ABC,
-):
+class Exit[** Param, Ret, Decoratee, Exit, Enter, Decorated, Decorator](Base, abc.ABC):
     enter: Enter
 
 
@@ -169,18 +158,7 @@ class SynchronousExit[
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Enter[
-    ** Param,
-    Ret,
-    Decoratee,
-    Exit,
-    Enter,
-    Decorated,
-    Decorator,
-](
-    Base,
-    abc.ABC,
-):
+class Enter[** Param, Ret, Decoratee, Exit, Enter, Decorated, Decorator](Base, abc.ABC):
     decorated: Decorated
 
 
@@ -208,12 +186,7 @@ class CooperativeEnter[
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SynchronousEnter[
-    ** Param,
-    Ret,
-    Decorated,
-    Decorator,
-](
+class SynchronousEnter[** Param, Ret, Decorated, Decorator](
     Synchronous,
     Enter[
         Param,
@@ -231,18 +204,7 @@ class SynchronousEnter[
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorated[
-    ** Param,
-    Ret,
-    Decoratee,
-    Exit,
-    Enter,
-    Self,
-    Decorator,
-](
-    Base,
-    abc.ABC,
-):
+class Decorated[** Param, Ret, Decoratee, Exit, Enter, Decorated, Decorator](Base, abc.ABC):
     __doc__: str
     __module__: str
     __name__: str
@@ -252,7 +214,7 @@ class Decorated[
 
     @property
     @abc.abstractmethod
-    def decorated_t(self) -> type[Self]: ...
+    def decorated_t(self) -> type[Decorated]: ...
 
     @property
     @abc.abstractmethod
@@ -267,11 +229,7 @@ class Decorated[
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CooperativeDecorated[
-    ** Param,
-    Ret,
-    Decorator,
-](
+class CooperativeDecorated[** Param, Ret, Decorator](
     Cooperative,
     Decorated[
         Param,
@@ -310,11 +268,7 @@ class CooperativeDecorated[
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SynchronousDecorated[
-    ** Param,
-    Ret,
-    Decorator,
-](
+class SynchronousDecorated[** Param, Ret, Decorator](
     Synchronous,
     Decorated[
         Param,
@@ -353,45 +307,21 @@ class SynchronousDecorated[
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Param, Ret](Base, abc.ABC):
+class Decorator[** Param, Ret, CooperativeDecorated, SynchronousDecorated](
+    Base,
+    abc.ABC,
+):
 
     @typing.overload
-    def __call__(
-            self,
-            decoratee: CooperativeDecoratee[Param, Ret],
-            /,
-    ) -> CooperativeDecorated[
-        Param,
-        Ret,
-        CooperativeExit[Param, Ret],
-        CooperativeEnter[Param, Ret],
-        typing.Self,
-    ]: ...
+    def __call__[** Param, Ret](self, decoratee: CooperativeDecoratee[Param, Ret], /) -> CooperativeDecorated: ...
     @typing.overload
-    def __call__(
-            self,
-            decoratee: SynchronousDecoratee[Param, Ret],
-            /,
-    ) -> SynchronousDecorated[
-        Param,
-        Ret,
-        SynchronousExit[Param, Ret],
-        SynchronousEnter[Param, Ret],
-        typing.Self,
-    ]: ...
-    def __call__(self, decoratee, /):
+    def __call__[** Param, Ret](self, decoratee: SynchronousDecoratee[Param, Ret], /) -> SynchronousDecorated: ...
+    def __call__[** Param, Ret](self, decoratee, /):
         return (
-            self.cooperative_decorated_t[
-                Param,
-                Ret,
-                typing.Self,
-            ]
+            self.cooperative_decorated_t[Param, Ret, typing.Self]
             if inspect.iscoroutinefunction(decoratee) else
-            self.synchronous_decorated_t[
-                Param,
-                Ret,
-                typing.Self,
-            ])(
+            self.synchronous_decorated_t[Param, Ret, typing.Self]
+        )(
             __doc__=str(decoratee.__doc__),
             __module__=str(decoratee.__module__),
             __name__=str(decoratee.__name__),
