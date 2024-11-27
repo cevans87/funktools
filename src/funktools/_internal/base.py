@@ -7,6 +7,25 @@ import sys
 import types
 import typing
 
+
+@typing.runtime_checkable
+class Decoratee[** Param, Ret](typing.Protocol):
+    def __call__(*args: Param.args, **kwargs: Param.kwargs) -> typing.Awaitable[Ret] | Ret: ...
+    def __get__(self, instance: Instance, owner) -> typing.Self: ...
+
+
+@typing.runtime_checkable
+class CooperativeDecoratee[** Param, Ret](typing.Protocol):
+    async def __call__(*args: Param.args, **kwargs: Param.kwargs) -> Ret: ...
+    def __get__(self, instance: Instance, owner) -> typing.Self: ...
+
+
+@typing.runtime_checkable
+class SynchronousDecoratee[** Param, Ret](typing.Protocol):
+    def __call__(*args: Param.args, **kwargs: Param.kwargs) -> Ret: ...
+    def __get__(self, instance: Instance, owner) -> typing.Self: ...
+
+
 type Instance = object
 type Name = typing.Annotated[str, annotated_types.Predicate(str.isidentifier)]  # noqa
 
@@ -18,143 +37,255 @@ class Raise:
     exc_tb: types.TracebackType
 
 
-@typing.runtime_checkable
-class AsyncDecoratee[** Param, Ret](typing.Protocol):
-    async def __call__(*args: Param.args, **kwargs: Param.kwargs) -> Ret: ...
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Base(abc.ABC):
 
+    @property
+    def cooperative_decorated_t(self) -> type[CooperativeDecorated]:
+        return inspect.getmodule(type(self)).CooperativeDecorated
 
-@typing.runtime_checkable
-class MultiDecoratee[** Param, Ret](typing.Protocol):
-    def __call__(*args: Param.args, **kwargs: Param.kwargs) -> Ret: ...
+    @property
+    def synchronous_decorated_t(self) -> type[SynchronousDecorated]:
+        return inspect.getmodule(type(self)).SynchronousDecorated
 
+    @property
+    def cooperative_enter_t(self) -> type[CooperativeEnter]:
+        return inspect.getmodule(type(self)).CooperativeEnter
 
-@typing.runtime_checkable
-class Decoratee[** Param, Ret](typing.Protocol):
-    def __call__(*args: Param.args, **kwargs: Param.kwargs) -> typing.Awaitable[Ret] | Ret: ...
+    @property
+    def synchronous_enter_t(self) -> type[SynchronousEnter]:
+        return inspect.getmodule(type(self)).SynchronousEnter
+
+    @property
+    def cooperative_exit_t(self) -> type[CooperativeExit]:
+        return inspect.getmodule(type(self)).CooperativeExit
+
+    @property
+    def synchronous_exit_t(self) -> type[SynchronousExit]:
+        return inspect.getmodule(type(self)).SynchronousExit
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Base[** Param, Ret](abc.ABC):
-    decoratee: Decoratee[Param, Ret]
+class Cooperative(Base, abc.ABC):
 
     @property
-    def async_enter_t(self) -> type[AsyncEnter[Param, Ret]]:
-        return inspect.getmodule(type(self)).AsyncEnter
+    def decorated_t(self) -> type[CooperativeDecorated]:
+        return self.cooperative_decorated_t
 
     @property
-    def multi_enter_t(self) -> type[MultiEnter[Param, Ret]]:
-        return inspect.getmodule(type(self)).MultiEnter
+    def enter_t(self) -> type[CooperativeEnter]:
+        return self.cooperative_enter_t
 
     @property
-    def async_exit_t(self) -> type[AsyncExit[Param, Ret]]:
-        return inspect.getmodule(type(self)).AsyncExit
+    def exit_t(self) -> type[CooperativeExit]:
+        return self.cooperative_exit_t
 
-    @property
-    def multi_exit_t(self) -> type[MultiExit[Param, Ret]]:
-        return inspect.getmodule(type(self)).MultiExit
-
-    @property
-    def async_decorated_t(self) -> type[AsyncDecorated[Param, Ret]]:
-        return inspect.getmodule(type(self)).AsyncDecorated
-
-    @property
-    def multi_decorated_t(self) -> type[MultiDecorated[Param, Ret]]:
-        return inspect.getmodule(type(self)).MultiDecorated
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Async[** Param, Ret](Base[Param, Ret], abc.ABC):
-
-    @property
-    def enter_t(self) -> type[AsyncEnter[Param, Ret]]:
-        return self.async_enter_t
-
-    @property
-    def exit_t(self) -> type[AsyncExit[Param, Ret]]:
-        return self.async_exit_t
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Multi[** Param, Ret](Base[Param, Ret], abc.ABC):
-
-    @property
-    def enter_t(self) -> type[MultiEnter[Param, Ret]]:
-        return self.multi_enter_t
-
-    @property
-    def exit_t(self) -> type[MultiExit[Param, Ret]]:
-        return self.multi_exit_t
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Context[** Param, Ret](Base[Param, Ret], abc.ABC):
-    args: Param.args
-    kwargs: Param.kwargs
-
-    @property
     @abc.abstractmethod
-    def enter_t(self) -> type[Enter[Param, Ret]]: ...
+    async def __call__(self, *args, **kwargs): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Synchronous(Base, abc.ABC):
 
     @property
+    def decorated_t(self) -> type[SynchronousDecorated]:
+        return self.synchronous_decorated_t
+
+    @property
+    def enter_t(self) -> type[SynchronousEnter]:
+        return self.synchronous_enter_t
+
+    @property
+    def exit_t(self) -> type[SynchronousExit]:
+        return self.synchronous_exit_t
+
     @abc.abstractmethod
-    def exit_t(self) -> type[Exit[Param, Ret]]: ...
+    def __call__(self, *args, **kwargs): ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Enter[** Param, Ret](Context[Param, Ret], abc.ABC): ...
+class Exit[
+    ** Param,
+    Ret,
+    Decoratee,
+    Exit,
+    Enter,
+    Decorated,
+    Decorator,
+](
+    Base,
+    abc.ABC,
+):
+    enter: Enter
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Exit[** Param, Ret](Context[Param, Ret], abc.ABC):
-
-    def __call__(self, ret: Ret) -> typing.Generator[object, object, Ret]:
-        return ret
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncEnter[** Param, Ret](Async[Param, Ret], Enter[Param, Ret], abc.ABC):
-
-    async def __call__(self) -> tuple[Decoratee[Param, Ret]]:
-        return tuple([self.decoratee])
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiEnter[** Param, Ret](Multi[Param, Ret], Enter[Param, Ret], abc.ABC):
-
-    def __call__(self) -> tuple[Decoratee[Param, Ret]]:
-        return tuple([self.decoratee])
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncExit[** Param, Ret](Async[Param, Ret], Exit[Param, Ret], abc.ABC):
-
-    async def __call__(self, ret: Ret) -> tuple[()]:
+class CooperativeExit[
+    ** Param,
+    Ret,
+    Enter,
+    Decorated,
+    Decorator,
+](
+    Cooperative,
+    Exit[
+        Param,
+        Ret,
+        CooperativeDecoratee[Param, Ret],
+        typing.Self,
+        Enter,
+        Decorated,
+        Decorator,
+    ],
+    abc.ABC,
+):
+    async def __call__(self, result: Raise | Ret) -> ():
         return tuple()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiExit[** Param, Ret](Multi[Param, Ret], Exit[Param, Ret], abc.ABC):
+class SynchronousExit[
+    ** Param,
+    Ret,
+    Enter,
+    Decorated,
+    Decorator,
+](
+    Synchronous,
+    Exit[
+        Param,
+        Ret,
+        SynchronousDecoratee[Param, Ret],
+        typing.Self,
+        Enter,
+        Decorated,
+        Decorator,
+    ],
+    abc.ABC,
+):
 
-    def __call__(self, ret: Ret) -> tuple[()]:
+    def __call__(self, result: Raise | Ret) -> ():
         return tuple()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorated[** Param, Ret](Base[Param, Ret], abc.ABC):
+class Enter[
+    ** Param,
+    Ret,
+    Decoratee,
+    Exit,
+    Enter,
+    Decorated,
+    Decorator,
+](
+    Base,
+    abc.ABC,
+):
+    decorated: Decorated
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeEnter[
+    ** Param,
+    Ret,
+    Decorated,
+    Decorator,
+](
+    Cooperative,
+    Enter[
+        Param,
+        Ret,
+        CooperativeDecoratee[Param, Ret],
+        CooperativeExit[Param, Ret, typing.Self, Decorated, Decorator],
+        typing.Self,
+        Decorated,
+        Decorator,
+    ],
+    abc.ABC,
+):
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> (CooperativeDecoratee[Param, Ret],):
+        return tuple([self.decorated.decoratee])
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SynchronousEnter[
+    ** Param,
+    Ret,
+    Decorated,
+    Decorator,
+](
+    Synchronous,
+    Enter[
+        Param,
+        Ret,
+        SynchronousDecoratee[Param, Ret],
+        SynchronousExit[Param, Ret, typing.Self, Decorated, Decorator],
+        typing.Self,
+        Decorated,
+        Decorator,
+    ],
+    abc.ABC,
+):
+    def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> (SynchronousDecoratee[Param, Ret],):
+        return tuple([self.decorated.decoratee])
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Decorated[
+    ** Param,
+    Ret,
+    Decoratee,
+    Exit,
+    Enter,
+    Self,
+    Decorator,
+](
+    Base,
+    abc.ABC,
+):
     __doc__: str
     __module__: str
     __name__: str
     __qualname__: str
+    decoratee: Decoratee
+    decorator: Decorator
+
+    @property
+    @abc.abstractmethod
+    def decorated_t(self) -> type[Self]: ...
+
+    @property
+    @abc.abstractmethod
+    def enter_t(self) -> type[Enter]: ...
+
+    @property
+    @abc.abstractmethod
+    def exit_t(self) -> type[Exit]: ...
 
     def __get__(self, instance: Instance, owner) -> typing.Self:
         return dataclasses.replace(self, decoratee=self.decoratee.__get__(instance, owner))
 
-    def to_enter(self, *args: Param.args, **kwargs: Param.kwargs) -> Enter[Param, Ret]:
-        return self.enter_t(args=args, decoratee=self.decoratee, kwargs=kwargs)
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncDecorated[** Param, Ret](Async[Param, Ret], Decorated[Param, Ret], abc.ABC):
+class CooperativeDecorated[
+    ** Param,
+    Ret,
+    Decorator,
+](
+    Cooperative,
+    Decorated[
+        Param,
+        Ret,
+        CooperativeDecoratee[Param, Ret],
+        CooperativeExit[Param, Ret, CooperativeEnter[Param, Ret, typing.Self, Decorator], typing.Self, Decorator],
+        CooperativeEnter[Param, Ret, typing.Self, Decorator],
+        typing.Self,
+        Decorator,
+    ],
+    abc.ABC,
+):
 
+    @typing.final
     async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> Ret:
         result: Raise | Ret = ...
         stack = [self]
@@ -162,9 +293,9 @@ class AsyncDecorated[** Param, Ret](Async[Param, Ret], Decorated[Param, Ret], ab
             try:
                 match stack.pop():
                     case Decorated() as decorated:
-                        stack.append(decorated.to_enter(*args, **kwargs))
+                        stack.append(decorated.enter_t(decorated=decorated))
                     case Enter() as enter:
-                        stack.extend(await enter())
+                        stack.extend(await enter(*args, **kwargs))
                     case Exit() as exit_:
                         stack.extend(await exit_(result))
                     case Decoratee() as decoratee:
@@ -179,8 +310,25 @@ class AsyncDecorated[** Param, Ret](Async[Param, Ret], Decorated[Param, Ret], ab
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiDecorated[** Param, Ret](Multi[Param, Ret], Decorated[Param, Ret], abc.ABC):
+class SynchronousDecorated[
+    ** Param,
+    Ret,
+    Decorator,
+](
+    Synchronous,
+    Decorated[
+        Param,
+        Ret,
+        SynchronousDecoratee[Param, Ret],
+        SynchronousExit[Param, Ret, SynchronousEnter[Param, Ret, typing.Self, Decorator], typing.Self, Decorator],
+        SynchronousEnter[Param, Ret, typing.Self, Decorator],
+        typing.Self,
+        Decorator,
+    ],
+    abc.ABC,
+):
 
+    @typing.final
     def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> Ret:
         result: Raise | Ret = ...
         stack = [self]
@@ -188,9 +336,9 @@ class MultiDecorated[** Param, Ret](Multi[Param, Ret], Decorated[Param, Ret], ab
             try:
                 match stack.pop():
                     case Decorated() as decorated:
-                        stack.append(decorated.to_enter(*args, **kwargs))
+                        stack.append(decorated.enter_t(decorated=decorated))
                     case Enter() as enter:
-                        stack.extend(enter())
+                        stack.extend(enter(*args, **kwargs))
                     case Exit() as exit_:
                         stack.extend(exit_(result))
                     case Decoratee() as decoratee:
@@ -205,20 +353,51 @@ class MultiDecorated[** Param, Ret](Multi[Param, Ret], Decorated[Param, Ret], ab
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Param, Ret](abc.ABC):
+class Decorator[** Param, Ret](Base, abc.ABC):
 
-    def __call__(self, decoratee: Decoratee[Param, Ret], /) -> Decorated[Param, Ret]:
-        if inspect.iscoroutinefunction(decoratee):
-            decorated_t: AsyncDecorated[Param, Ret] = inspect.getmodule(type(self)).AsyncDecorated
-        else:
-            decorated_t: MultiDecorated[Param, Ret] = inspect.getmodule(type(self)).MultiDecorated
-
-        decorated = decorated_t(
-                decoratee=decoratee,
-                __doc__=str(decoratee.__doc__),
-                __module__=str(decoratee.__module__),
-                __name__=str(decoratee.__name__),
-                __qualname__=str(decoratee.__qualname__),
+    @typing.overload
+    def __call__(
+            self,
+            decoratee: CooperativeDecoratee[Param, Ret],
+            /,
+    ) -> CooperativeDecorated[
+        Param,
+        Ret,
+        CooperativeExit[Param, Ret],
+        CooperativeEnter[Param, Ret],
+        typing.Self,
+    ]: ...
+    @typing.overload
+    def __call__(
+            self,
+            decoratee: SynchronousDecoratee[Param, Ret],
+            /,
+    ) -> SynchronousDecorated[
+        Param,
+        Ret,
+        SynchronousExit[Param, Ret],
+        SynchronousEnter[Param, Ret],
+        typing.Self,
+    ]: ...
+    def __call__(self, decoratee, /):
+        return (
+            self.cooperative_decorated_t[
+                Param,
+                Ret,
+                typing.Self,
+            ]
+            if inspect.iscoroutinefunction(decoratee) else
+            self.synchronous_decorated_t[
+                Param,
+                Ret,
+                typing.Self,
+            ])(
+            __doc__=str(decoratee.__doc__),
+            __module__=str(decoratee.__module__),
+            __name__=str(decoratee.__name__),
+            __qualname__=str(decoratee.__qualname__),
+            decoratee=decoratee,
+            decorator=self,
         )
 
-        return decorated
+

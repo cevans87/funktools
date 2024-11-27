@@ -6,6 +6,7 @@ import ast
 import asyncio
 import collections
 import dataclasses
+import inspect
 import pathlib
 import sqlite3
 import textwrap
@@ -112,10 +113,7 @@ class Exit[** Param, Ret](base.Exit[Param, Ret], abc.ABC):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncEnterContext[** Param, Ret](
-    EnterContext[Param, Ret],
-    base.AsyncEnterContext[Param, Ret],
-):
+class AsyncEnter[** Param, Ret](Async[Param, Ret], Enter[Param, Ret], base.AsyncEnter[Param, Ret]):
     exit_context_by_key: collections.OrderedDict[Key, AsyncExitContext[Param, Ret]] = dataclasses.field(
         default_factory=collections.OrderedDict
     )
@@ -125,7 +123,7 @@ class AsyncEnterContext[** Param, Ret](
         self,
         *args: Param.args,
         **kwargs: Param.kwargs,
-    ) -> (AsyncExitContext[Param, Ret], base.AsyncEnterContext[Param, Ret]) | Ret:
+    ) -> (AsyncExit[Param, Ret], base.AsyncEnter[Param, Ret]) | Ret:
         key = self.dumps_key(*args, **kwargs)
         async with self.lock:
             if (exit_context := self.exit_context_by_key.get(key)) is not None:
@@ -140,10 +138,7 @@ class AsyncEnterContext[** Param, Ret](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiEnterContext[** Param, Ret](
-    EnterContext[Param, Ret],
-    base.MultiEnterContext[Param, Ret],
-):
+class MultiEnter[** Param, Ret](Multi[Param, Ret], Enter[Param, Ret], base.MultiEnter[Param, Ret]):
     exit_context_by_key: collections.OrderedDict[Key, MultiExitContext[Param, Ret]] = dataclasses.field(
         default_factory=collections.OrderedDict
     )
@@ -157,7 +152,7 @@ class MultiEnterContext[** Param, Ret](
         self,
         *args: Param.args,
         **kwargs: Param.kwargs,
-    ) -> (MultiExitContext[Param, Ret], base.MultiEnterContext[Param, Ret]) | Ret:
+    ) -> tuple[MultiExit[Param, Ret], base.Decoratee[Param, Ret]] | (Ret,):
         key = self.dumps_key(*args, **kwargs)
         with self.lock:
             if (exit_context := self.exit_context_by_key.get(key)) is not None:
@@ -172,10 +167,7 @@ class MultiEnterContext[** Param, Ret](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncExitContext[** Param, Ret](
-    ExitContext[Param, Ret],
-    base.AsyncExitContext[Param, Ret],
-):
+class AsyncExit[** Param, Ret](Async[Param, Ret], Exit[Param, Ret], base.AsyncExit[Param, Ret]):
     event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
 
     async def __call__(self, result: base.Raise | Ret) -> Ret:
@@ -183,14 +175,23 @@ class AsyncExitContext[** Param, Ret](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiExitContext[** Param, Ret](
-    ExitContext[Param, Ret],
-    base.MultiExitContext[Param, Ret],
-):
+class MultiExit[** Param, Ret](Multi[Param, Ret], Exit[Param, Ret], base.MultiExit[Param, Ret]):
     event: threading.Event = dataclasses.field(default_factory=threading.Event)
 
     def __call__(self, result: base.Raise | Ret) -> Ret:
         return super().__call__(result)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Decorated[** Param, Ret](base.Decorated[Param, Ret], Base[Param, Ret], abc.ABC): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class AsyncDecorated[** Param, Ret](base.AsyncDecorated[Param, Ret], Decorated[Param, Ret]): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class MultiDecorated[** Param, Ret](base.MultiDecorated[Param, Ret], Decorated[Param, Ret]): ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -201,36 +202,32 @@ class Decorator[** Param, Ret](base.Decorator[Param, Ret]):
     duration: typing.Annotated[float, annotated_types.Ge(0.0)] | None = None
     loads_value: LoadsValue[Ret] = ast.literal_eval
 
-    def __call__(
-        self,
-        decoratee: base.Decoratee[Param, Ret] | base.Decorated[Param, Ret],
-        /,
-    ) -> base.Decorated[Param, Ret]:
+    @typing.overload
+    def __call__(self, decoratee: base.AsyncDecoratee[Param, Ret], /) -> AsyncDecorated[Param, Ret]: ...
+    @typing.overload
+    def __call__(self, decoratee: base.MultiDecoratee[Param, Ret], /) -> MultiDecorated[Param, Ret]: ...
+    def __call__(self, decoratee, /):
         decoratee = super().__call__(decoratee)
 
         if (dumps_key := self.dumps_key) is ...:
             def dumps_key(*args, **kwargs) -> Key:
-                bound = decoratee.signature.bind(*args, **kwargs)
+                bound = inspect.signature(decoratee).bind(*args, **kwargs)
                 bound.apply_defaults()
                 return repr((bound.args, tuple(sorted(bound.kwargs))))
 
-        match decoratee:
-            case base.AsyncDecorated():
-                enter_context_t = AsyncEnterContext
-            case base.MultiDecorated():
-                enter_context_t = MultiEnterContext
-            case _: assert False, 'Unreachable'  # pragma: no cover
+        if inspect.iscoroutinefunction(decoratee):
+            decorated_t: type[AsyncDecorated[Param, Ret]] = AsyncDecorated[Param, Ret]
+        else:
+            decorated_t: type[MultiDecorated[Param, Ret]] = MultiDecorated[Param, Ret]
 
-        decorated = self.register.decorateds[decoratee.register_key] = dataclasses.replace(
-            decoratee,
-            enter_context=enter_context_t(
-                connection=sqlite3.connect(self.db_path, isolation_level=None),
-                dumps_key=dumps_key,
-                dumps_value=self.dumps_value,
-                loads_value=self.loads_value,
-                next_enter_context=decoratee.enter_context,
-                table_name='__'.join(decoratee.register_key),
-            ),
+        decorated = decorated_t(
+            decoratee=decoratee,
+            connection=sqlite3.connect(self.db_path, isolation_level=None),
+            dumps_key=dumps_key,
+            dumps_value=self.dumps_value,
+            loads_value=self.loads_value,
+            next_enter_context=decoratee.enter_context,
+            table_name='__'.join(decoratee.register_key),
         )
 
         return decorated
