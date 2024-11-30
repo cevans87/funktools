@@ -43,9 +43,9 @@ class Base(
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Call[Decoratee, Exit, Enter, Decorated, Decorator](
+class Call[_Decoratee, _Exit, _Enter, _Decorated, _Decorator](
     Base,
-    base.Call[Decoratee, Exit, Enter, Decorated, Decorator],
+    base.Call[_Decoratee, _Exit, _Enter, _Decorated, _Decorator],
     abc.ABC,
 ): ...
 
@@ -91,32 +91,32 @@ class Synchronous[** Param, Ret](
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Exit[** Param, Ret, Decoratee, Enter, Decorated, Decorator, Future](
-    Call[Decoratee, typing.Self, Enter, Decorated, Decorator],
-    base.Exit[Param, Ret, Decoratee, Enter, Decorated, Decorator],
+class Exit[** Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator, _Future](
+    Call[_Decoratee, typing.Self, _Enter, _Decorated, _Decorator],
+    base.Exit[Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator],
     abc.ABC,
 ):
-    future: Future
+    future: _Future
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Enter[** Param, Ret, Decoratee, Exit, Decorated, Decorator](
-    Call[Decoratee, Exit, typing.Self, Decorated, Decorator],
-    base.Enter[Param, Ret, Decoratee, Exit, Decorated, Decorator],
+class Enter[** Param, Ret, _Decoratee, _Exit, _Decorated, _Decorator](
+    Call[_Decoratee, _Exit, typing.Self, _Decorated, _Decorator],
+    base.Enter[Param, Ret, _Decoratee, _Exit, _Decorated, _Decorator],
     abc.ABC,
 ): ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorated[** Param, Ret, Decoratee, Exit, Enter, Decorator, Future](
-    Call[Decoratee, Exit, Enter, typing.Self, Decorator],
-    base.Decorated[Param, Ret, Decoratee, Exit, Enter, Decorator],
+class Decorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator, _Future](
+    Call[_Decoratee, _Exit, _Enter, typing.Self, _Decorator],
+    base.Decorated[Param, Ret, _Decoratee, _Exit, _Enter, _Decorator],
     abc.ABC,
 ):
     decorated_by_instance: weakref.WeakKeyDictionary[
         base.Instance, typing.Self,
     ] = dataclasses.field(default_factory=weakref.WeakKeyDictionary)
-    future_by_key: collections.OrderedDict[Key, Future] = dataclasses.field(default_factory=collections.OrderedDict)
+    future_by_key: collections.OrderedDict[Key, _Future] = dataclasses.field(default_factory=collections.OrderedDict)
 
     def __get__(self, instance, owner) -> typing.Self:
         return self.decorated_by_instance.setdefault(
