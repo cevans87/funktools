@@ -16,41 +16,139 @@ type GenerateKey[** Params, Key] = typing.Callable[Params, Key]
 type Key = typing.Hashable
 type Lock = asyncio.Lock | threading.Lock
 
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Cooperative(base.Cooperative, abc.ABC): ...
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Synchronous(base.Synchronous, abc.ABC): ...
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Base(base.Base, abc.ABC): ...
+type _CooperativeDecoratee[** Param, Ret] = base.CooperativeDecoratee[Param, Ret]
+type _SynchronousDecoratee[** Param, Ret] = base.SynchronousDecoratee[Param, Ret]
+type _CooperativeExit[** Param, Ret] = CooperativeExit[Param, Ret]
+type _SynchronousExit[** Param, Ret] = SynchronousExit[Param, Ret]
+type _CooperativeEnter[** Param, Ret] = CooperativeEnter[Param, Ret]
+type _SynchronousEnter[** Param, Ret] = SynchronousEnter[Param, Ret]
+type _CooperativeDecorated[** Param, Ret] = CooperativeDecorated[Param, Ret]
+type _SynchronousDecorated[** Param, Ret] = SynchronousDecorated[Param, Ret]
+type _Decorator[** Param, Ret] = Decorator[Param, Ret]
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Exit[** Param, Ret, Future, Decoratee, Exit, Enter, Decorated, Decorator](
-    base.Exit[Param, Ret, Decoratee, Exit, Enter, Decorated, Decorator],
+class Base(
+    base.Base[
+        _CooperativeExit,
+        _SynchronousExit,
+        _CooperativeEnter,
+        _SynchronousEnter,
+        _CooperativeDecorated,
+        _SynchronousDecorated,
+        _Decorator,
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Call[Decoratee, Exit, Enter, Decorated, Decorator](
+    Base,
+    base.Call[Decoratee, Exit, Enter, Decorated, Decorator],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Cooperative[** Param, Ret](
+    Call[
+        base.CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.Cooperative[
+        base.CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Synchronous[** Param, Ret](
+    Call[
+        base.SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.Synchronous[
+        base.SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Exit[** Param, Ret, Decoratee, Enter, Decorated, Decorator, Future](
+    Call[Decoratee, typing.Self, Enter, Decorated, Decorator],
+    base.Exit[Param, Ret, Decoratee, Enter, Decorated, Decorator],
     abc.ABC,
 ):
     future: Future
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CooperativeExit[** Param, Ret, Enter, Decorated, Decorator](
+class Enter[** Param, Ret, Decoratee, Exit, Decorated, Decorator](
+    Call[Decoratee, Exit, typing.Self, Decorated, Decorator],
+    base.Enter[Param, Ret, Decoratee, Exit, Decorated, Decorator],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Decorated[** Param, Ret, Decoratee, Exit, Enter, Decorator, Future](
+    Call[Decoratee, Exit, Enter, typing.Self, Decorator],
+    base.Decorated[Param, Ret, Decoratee, Exit, Enter, Decorator],
+    abc.ABC,
+):
+    decorated_by_instance: weakref.WeakKeyDictionary[
+        base.Instance, typing.Self,
+    ] = dataclasses.field(default_factory=weakref.WeakKeyDictionary)
+    future_by_key: collections.OrderedDict[Key, Future] = dataclasses.field(default_factory=collections.OrderedDict)
+
+    def __get__(self, instance, owner) -> typing.Self:
+        return self.decorated_by_instance.setdefault(
+            instance, dataclasses.replace(
+                self,
+                decoratee=self.decoratee.__get__(instance, owner),
+                future_by_key=collections.OrderedDict(),
+            )
+        )
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeExit[** Param, Ret](
     Cooperative,
     Exit[
         Param,
         Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
         asyncio.Future[Ret],
-        base.CooperativeDecoratee[Param, Ret],
-        typing.Self,
-        Enter,
-        Decorated,
-        Decorator,
     ],
-    base.CooperativeExit[Param, Ret, Enter, Decorated, Decorator],
+    base.CooperativeExit[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
 ):
     future: asyncio.Future[Ret] = dataclasses.field(default_factory=asyncio.Future)
 
@@ -60,20 +158,27 @@ class CooperativeExit[** Param, Ret, Enter, Decorated, Decorator](
         return tuple()
 
 
+@typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SynchronousExit[** Param, Ret, Enter, Decorated, Decorator](
+class SynchronousExit[** Param, Ret](
     Synchronous,
     Exit[
         Param,
         Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
         concurrent.futures.Future[Ret],
-        base.SynchronousDecoratee[Param, Ret],
-        typing.Self,
-        Enter,
-        Decorated,
-        Decorator,
     ],
-    base.SynchronousExit[Param, Ret, Enter, Decorated, Decorator],
+    base.SynchronousExit[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
 ):
     future: concurrent.futures.Future[Ret] = dataclasses.field(default_factory=concurrent.futures.Future)
 
@@ -82,146 +187,137 @@ class SynchronousExit[** Param, Ret, Enter, Decorated, Decorator](
 
         return tuple()
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Enter[** Param, Ret, Lock, Decoratee, Exit, Enter, Decorated, Decorator](
-    Base,
-    base.Enter[Param, Ret, Decoratee, Exit, typing.Self, Decorated, Decorator],
-    abc.ABC,
-):
-    exit_by_key: collections.OrderedDict[Key, Exit] = dataclasses.field(
-        default_factory=collections.OrderedDict,
-    )
-    lock: Lock
 
-
+@typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CooperativeEnter[** Param, Ret, Decorated, Decorator](
+class CooperativeEnter[** Param, Ret](
     Cooperative,
     Enter[
         Param,
         Ret,
-        asyncio.Lock,
-        base.CooperativeDecoratee[Param, Ret],
-        CooperativeExit[Param, Ret, typing.Self, Decorated, Decorator],
-        typing.Self,
-        Decorated,
-        Decorator,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
     ],
-    base.CooperativeEnter[Param, Ret, Decorated, Decorator],
+    base.CooperativeEnter[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
 ):
-    type Decoratee = base.CooperativeDecoratee[Param, Ret]
-    type Exit = CooperativeExit[Param, Ret, typing.Self, Decorated, Decorator]
-    type Enter = typing.Self
+    type _Decoratee = _CooperativeDecoratee[Param, Ret]
+    type _Exit = _CooperativeExit[Param, Ret]
+    type _Enter = typing.Self
+    type _Decorator = _Decorator[Param, Ret]
 
-    @typing.final
-    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[Decoratee] | tuple[Exit, Decorator]:
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Decoratee] | tuple[_Exit, _Decorator]:
         key = self.decorated.decorator.generate_key(*args, **kwargs)
 
-        async with self.lock:
-            exit_ = self.exit_by_key.pop(key, None)
-            while self.decorated.decorator.size <= len(self.exit_by_key):
-                self.exit_by_key.popitem(last=False)
-            if exit_ is None:
-                exit_ = self.exit_by_key[key] = CooperativeExit(enter=self)
-                return exit_, self.decorated.decoratee
-            else:
-                self.exit_by_key[key] = exit_
-                return (lambda *_args, **_kwargs: exit_.future),
+        future = self.decorated.future_by_key.pop(key, None)
+        while self.decorated.decorator.size <= len(self.decorated.future_by_key):
+            self.decorated.future_by_key.popitem(last=False)
+        if future is None:
+            future = self.decorated.future_by_key[key] = asyncio.Future()
+            return CooperativeExit(enter=self, future=future), self.decorated.decoratee
+        else:
+            self.decorated.future_by_key[key] = future
+            return (lambda *_args, **_kwargs: future),
 
 
+@typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SynchronousEnter[** Param, Ret, Decorated, Decorator](
+class SynchronousEnter[** Param, Ret](
     Synchronous,
     Enter[
         Param,
         Ret,
-        threading.Lock,
-        base.SynchronousDecoratee[Param, Ret],
-        SynchronousExit[Param, Ret, typing.Self, Decorated, Decorator],
-        typing.Self,
-        Decorated,
-        Decorator,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
     ],
-    base.SynchronousEnter[Param, Ret, Decorated, Decorator],
+    base.SynchronousEnter[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
 ):
-    type Decoratee = base.SynchronousDecoratee[Param, Ret]
-    type Exit = SynchronousExit[Param, Ret, typing.Self, Decorated, Decorator]
-    type Enter = typing.Self
+    type _Decoratee = _SynchronousDecoratee[Param, Ret]
+    type _Exit = _SynchronousExit[Param, Ret]
+    type _Enter = typing.Self
+    type _Decorator = _Decorator[Param, Ret]
 
-    def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[Decoratee] | tuple[Exit, Decorator]:
+    def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Decoratee] | tuple[_Exit, _Decorator]:
         key = self.decorated.decorator.generate_key(*args, **kwargs)
 
-        with self.lock:
-            exit_ = self.exit_by_key.pop(key, None)
-            while self.decorated.decorator.size <= len(self.exit_by_key):
-                self.exit_by_key.popitem(last=False)
-            if exit_ is None:
-                exit_ = self.exit_by_key[key] = SynchronousExit(enter=self)
-                return exit_, self.decorated.decoratee
-            else:
-                self.exit_by_key[key] = exit_
-                return (lambda *_args, **_kwargs: exit_.future.result()),
+        future = self.decorated.future_by_key.pop(key, None)
+        while self.decorated.decorator.size <= len(self.decorated.future_by_key):
+            self.decorated.future_by_key.popitem(last=False)
+        if future is None:
+            future = self.decorated.future_by_key[key] = asyncio.Future()
+            return SynchronousExit(enter=self, future=future), self.decorated.decoratee
+        else:
+            self.decorated.future_by_key[key] = future
+            return (lambda *_args, **_kwargs: future.result()),
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorated[** Param, Ret, Lock, Decoratee, Exit, Enter, Decorated, Decorator](
-    base.Decorated[Param, Ret, Decoratee, Exit, Enter, Decorated, Decorator],
-    abc.ABC,
-):
-    lock: Lock
-    enter_by_instance: weakref.WeakKeyDictionary[
-        base.Instance, Enter
-    ] = dataclasses.field(default_factory=weakref.WeakKeyDictionary)
-    instance: base.Instance | None = None
-
-    def __get__(self, instance, owner) -> typing.Self:
-        # TODO: Left off changing `enter` to `instance`. The way a memoized `enter` is created needs to be debugged.
-        return dataclasses.replace(self, decoratee=self.decoratee.__get__(instance, owner), instance=instance)
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class CooperativeDecorated[** Param, Ret, Decorator](
+class CooperativeDecorated[** Param, Ret](
     Cooperative,
     Decorated[
         Param,
         Ret,
-        asyncio.Lock,
-        base.CooperativeDecoratee[Param, Ret],
-        CooperativeExit[Param, Ret, CooperativeEnter[Param, Ret, typing.Self, Decorator], typing.Self, Decorator],
-        CooperativeEnter[Param, Ret, typing.Self, Decorator],
-        typing.Self,
-        Decorator,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _Decorator[Param, Ret],
+        asyncio.Future[Ret],
     ],
-    base.CooperativeDecorated[Param, Ret, Decorator],
-):
-    lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
+    base.CooperativeDecorated[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+): ...
 
 
+@typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SynchronousDecorated[** Param, Ret, Decorator](
+class SynchronousDecorated[** Param, Ret](
     Synchronous,
     Decorated[
         Param,
         Ret,
-        threading.Lock,
-        base.SynchronousDecoratee[Param, Ret],
-        SynchronousExit[Param, Ret, SynchronousEnter[Param, Ret, typing.Self, Decorator], typing.Self, Decorator],
-        SynchronousEnter[Param, Ret, typing.Self, Decorator],
-        typing.Self,
-        Decorator,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _Decorator[Param, Ret],
+        concurrent.futures.Future[Ret],
     ],
-    base.SynchronousDecorated[Param, Ret, Decorator],
-):
-    lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
+    base.SynchronousDecorated[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+): ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Decorator[** Param, Ret](
-    base.Decorator[
-        Param,
-        Ret,
-        CooperativeDecorated[Param, Ret, typing.Self],
-        SynchronousDecorated[Param, Ret, typing.Self],
-    ]
+    base.Decorator[Param, Ret, CooperativeDecorated[Param, Ret], SynchronousDecorated[Param, Ret]]
 ):
     generate_key: GenerateKey[Param] = lambda *args, **kwargs: (tuple(args), tuple(sorted([*kwargs.items()])))
     size: int = sys.maxsize
