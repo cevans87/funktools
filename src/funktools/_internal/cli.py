@@ -1,47 +1,6 @@
-"""Provides `CLI` decorator class and sane-default instantiated `cli` decorator instance.
-
-The decorator may be used to simplify generation of a CLI based entirely on decorated entrypoint function signature.
-
-Single-entrypoint example:
-
-    - file: foo.py
-        from funktools.cli import CLI
-
-
-        @CLI()  # This will add `.cli` decoration to `entrypoint`.
-        def entrypoint(a: int, /, b: str, c: bool = True, *, d: float, e: tuple = tuple()) -> ...:
-            ...
-
-
-        if __name__ == '__main__':
-            # This will parse `sys.argv[1:]` and run entrypoint with parsed arguments.
-            entrypoint.cli.run()
-
-    - Command line executions:
-        $ ./foo.py 1 "this is b" --d 0.1"
-        $ ./foo.py 1 "this is b" --no-c --d 0.1 --e "t0" "t1" "t2"
-
-Multiple-entrypoint example:
-
-    - file: prog/__init__.py
-        import funktools
-
-
-        @funktools.CLI(submodules=True)  # This will find entrypoints in submodules named `entrypoint`.
-        def entrypoint(a: int, /, b: str, c: bool = True, *, d: float, e: tuple = tuple()) -> ...:
-            ...
-
-    - file: prog/foo.py
-        def entrypoint
-
-    - file: __main__.py
-        if __name__ == '__main__':
-            # This will parse `sys.argv[1:]` and run entrypoint with parsed arguments.
-            entrypoint.cli.run()
-
-"""
 from __future__ import annotations
 
+import abc
 import annotated_types
 import argparse
 import ast
@@ -61,8 +20,7 @@ import typing
 from . import base
 
 
-class _Exception(Exception):
-    ...
+class Exception(Exception): ...  # noqa
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -124,7 +82,7 @@ class ParseOne[T]:
         try:
             value = self._parse_arg(arg)
         except AssertionError as e:
-            raise _Exception(f'Could not parse {arg=!r}. {e}.')
+            raise Exception(f'Could not parse {arg=!r}. {e}.')
 
         return value
 
@@ -392,8 +350,272 @@ class ArgumentParser[** Params, Return](argparse.ArgumentParser):
     ...
 
 
+type _CooperativeDecoratee[** Param, Ret] = base.CooperativeDecoratee[Param, Ret]
+type _SynchronousDecoratee[** Param, Ret] = base.SynchronousDecoratee[Param, Ret]
+type _CooperativeExit[** Param, Ret] = CooperativeExit[Param, Ret]
+type _SynchronousExit[** Param, Ret] = SynchronousExit[Param, Ret]
+type _CooperativeEnter[** Param, Ret] = CooperativeEnter[Param, Ret]
+type _SynchronousEnter[** Param, Ret] = SynchronousEnter[Param, Ret]
+type _CooperativeDecorated[** Param, Ret] = CooperativeDecorated[Param, Ret]
+type _SynchronousDecorated[** Param, Ret] = SynchronousDecorated[Param, Ret]
+type _Decorator[** Param, Ret] = Decorator[Param, Ret]
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](base.Decorator[Params, Return]):
+class Base(
+    base.Base[
+        _CooperativeExit,
+        _SynchronousExit,
+        _CooperativeEnter,
+        _SynchronousEnter,
+        _CooperativeDecorated,
+        _SynchronousDecorated,
+        _Decorator,
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Call[_Decoratee, _Exit, _Enter, _Decorated, _Decorator](
+    Base,
+    base.Call[_Decoratee, _Exit, _Enter, _Decorated, _Decorator],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Cooperative[** Param, Ret](
+    Call[
+        base.CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.Cooperative[
+        base.CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Synchronous[** Param, Ret](
+    Call[
+        base.SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.Synchronous[
+        base.SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Enter[** Param, Ret, _Decoratee, _Exit, _Decorated, _Decorator](
+    Call[_Decoratee, _Exit, typing.Self, _Decorated, _Decorator],
+    base.Enter[Param, Ret, _Decoratee, _Exit, _Decorated, _Decorator],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Exit[** Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator](
+    Call[_Decoratee, typing.Self, _Enter, _Decorated, _Decorator],
+    base.Exit[Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator],
+    abc.ABC,
+): ...
+
+
+class Decorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator](
+    Call[_Decoratee, _Exit, _Enter, typing.Self, _Decorator],
+    base.Decorated[Param, Ret, _Decoratee, _Exit, _Enter, _Decorator],
+    abc.ABC,
+): ...
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeExit[** Param, Ret](
+    Exit[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    Cooperative[Param, Ret],
+    base.CooperativeExit[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+
+    @typing.overload
+    async def __call__(self, result: Ret) -> Ret: ...
+    @typing.overload
+    async def __call__(self, result: base.Raise) -> base.Raise: ...
+    async def __call__(self, result):
+        return super().__call__(result)
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SynchronousExit[** Param, Ret](
+    Exit[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    Synchronous[Param, Ret],
+    base.SynchronousExit[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+
+    @typing.overload
+    def __call__(self, result: Ret) -> Ret: ...
+    @typing.overload
+    def __call__(self, result: base.Raise) -> base.Raise: ...
+    def __call__(self, result):
+        return super().__call__(result)
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeEnter[** Param, Ret](
+    Enter[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    Cooperative[Param, Ret],
+    base.CooperativeEnter[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+    type _Decoratee = _CooperativeDecoratee[Param, Ret]
+    type _Exit = _CooperativeExit[Param, Ret]
+    type _Enter = typing.Self
+    type _Decorator = _Decorator[Param, Ret]
+
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Exit, _Decoratee]:
+        return super().__call__(*args, **kwargs)
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SynchronousEnter[** Param, Ret](
+    Enter[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    Synchronous[Param, Ret],
+    base.SynchronousEnter[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+    type _Decoratee = _SynchronousDecoratee[Param, Ret]
+    type _Exit = _SynchronousExit[Param, Ret]
+    type _Enter = typing.Self
+    type _Decorator = _Decorator[Param, Ret]
+
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Exit, _Decoratee]:
+        return super().__call__(*args, **kwargs)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeDecorated[** Param, Ret](
+    Decorated[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    Cooperative[Param, Ret],
+    base.CooperativeDecorated[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+): ...
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SynchronousDecorated[** Param, Ret](
+    Decorated[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    Synchronous[Param, Ret],
+    base.SynchronousDecorated[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Decorator[** Param, Ret](
+    base.Decorator[Param, Ret, _CooperativeDecorated[Param, Ret], _SynchronousDecorated[Param, Ret]],
+):
     """Decorate a function, adding `.cli` attribute.
 
     The `.cli.run` function parses command line arguments (e.g. `sys.argv[1:]`) and executes the decorated function with
@@ -435,23 +657,9 @@ class Decorator[** Params, Return](base.Decorator[Params, Return]):
 
     flags: tuple[_Flag, ...] = tuple()
 
-    register: typing.ClassVar[base.Register] = base.Register()
-
     AddArgument: typing.ClassVar = _AddArgument
     Annotated: typing.ClassVar = _Annotated
-    Exception: typing.ClassVar = _Exception
     type Key = str | base.Register.Key | base.Decorated | base.Decoratee
-
-    def __call__(
-        self,
-        decoratee: base.Decoratee[Params, Return] | base.Decorated[Params, Return],
-        /,
-    ) -> base.Decorated[Params, Return]:
-        decoratee = super().__call__(decoratee)
-
-        # We really do intend to return the decoratee here. The only point of CLI is to register the decoratee. We don't
-        # make a parser unless asked via CLI().get_argument_parser() or run unless asked via CLI().main().
-        return decoratee
 
     def gen_decorated(self, key: Key) -> base.Decorated[Params, Return]:
         match key:
@@ -487,7 +695,7 @@ class Decorator[** Params, Return](base.Decorator[Params, Return]):
         argument_parser = ArgumentParser(
             description='\n\n'.join(filter(None, [
                 decorated.__doc__.strip(),
-                f'return:\n  {pprint.pformat(decorated.signature.return_annotation, compact=True, width=75)}'
+                f'return:\n  {pprint.pformat(decorated.__signature__.return_annotation, compact=True, width=75)}'
             ])),
             formatter_class=argparse.RawTextHelpFormatter,
             add_help=False,

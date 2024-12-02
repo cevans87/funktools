@@ -1,3 +1,3 @@
-# README.md
+# funktools
 
-## TODO
+Like functools, but _funky_.

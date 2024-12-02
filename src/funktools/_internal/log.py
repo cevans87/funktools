@@ -86,7 +86,6 @@ class Synchronous[** Param, Ret](
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Exit[** Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator](
-
     Call[_Decoratee, typing.Self, _Enter, _Decorated, _Decorator],
     base.Exit[Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator],
     abc.ABC,
@@ -125,7 +124,7 @@ class Enter[** Param, Ret, _Decoratee, _Exit, _Decorated, _Decorator](
 
     @abc.abstractmethod
     def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Exit, _Decoratee]:
-        bound_arguments = inspect.signature(self.decorated).bind(*args, **kwargs)
+        bound_arguments = self.decorated.__signature__.bind(*args, **kwargs)
 
         self.decorated.decorator.logger.log(
             logging.getLevelNamesMapping()[self.decorated.decorator.call_level],
@@ -146,7 +145,6 @@ class Decorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CooperativeExit[** Param, Ret](
-    Cooperative[Param, Ret],
     Exit[
         Param,
         Ret,
@@ -155,6 +153,7 @@ class CooperativeExit[** Param, Ret](
         _CooperativeDecorated[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Cooperative[Param, Ret],
     base.CooperativeExit[
         Param,
         Ret,
@@ -176,7 +175,6 @@ class CooperativeExit[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SynchronousExit[** Param, Ret](
-    Synchronous[Param, Ret],
     Exit[
         Param,
         Ret,
@@ -185,6 +183,7 @@ class SynchronousExit[** Param, Ret](
         _SynchronousDecorated[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Synchronous[Param, Ret],
     base.SynchronousExit[
         Param,
         Ret,
@@ -206,7 +205,6 @@ class SynchronousExit[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CooperativeEnter[** Param, Ret](
-    Cooperative[Param, Ret],
     Enter[
         Param,
         Ret,
@@ -215,6 +213,7 @@ class CooperativeEnter[** Param, Ret](
         _CooperativeDecorated[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Cooperative[Param, Ret],
     base.CooperativeEnter[
         Param,
         Ret,
@@ -236,7 +235,6 @@ class CooperativeEnter[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SynchronousEnter[** Param, Ret](
-    Synchronous[Param, Ret],
     Enter[
         Param,
         Ret,
@@ -245,6 +243,7 @@ class SynchronousEnter[** Param, Ret](
         _SynchronousDecorated[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Synchronous[Param, Ret],
     base.SynchronousEnter[
         Param,
         Ret,
@@ -265,7 +264,6 @@ class SynchronousEnter[** Param, Ret](
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CooperativeDecorated[** Param, Ret](
-    Cooperative[Param, Ret],
     Decorated[
         Param,
         Ret,
@@ -274,6 +272,7 @@ class CooperativeDecorated[** Param, Ret](
         _CooperativeEnter[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Cooperative[Param, Ret],
     base.CooperativeDecorated[
         Param,
         Ret,
@@ -288,7 +287,6 @@ class CooperativeDecorated[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SynchronousDecorated[** Param, Ret](
-    Synchronous[Param, Ret],
     Decorated[
         Param,
         Ret,
@@ -297,6 +295,7 @@ class SynchronousDecorated[** Param, Ret](
         _SynchronousEnter[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Synchronous[Param, Ret],
     base.SynchronousDecorated[
         Param,
         Ret,
