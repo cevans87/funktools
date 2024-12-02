@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import abc
+import builtins
 import dataclasses
 import inspect
 import sys
 import types
 import typing
 
+
+class Exception(Exception): ...  # noqa
 
 @typing.runtime_checkable
 class Decoratee[** Param, Ret](typing.Protocol):
@@ -216,6 +219,7 @@ class Decorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator](
     __module__: str
     __name__: str
     __qualname__: str
+    __signature__: inspect.Signature
     decoratee: _Decoratee
     decorator: _Decorator
 
@@ -300,7 +304,7 @@ class CooperativeDecorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator]
                         stack.extend(await exit_(result))
                     case Decoratee() as decoratee:
                         result = await decoratee(*args, **kwargs)
-            except Exception:  # noqa
+            except builtins.Exception:  # noqa
                 result = Raise(*sys.exc_info())
 
         if isinstance(result, Raise):
@@ -331,7 +335,7 @@ class SynchronousDecorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator]
                         stack.extend(exit_(result))
                     case Decoratee() as decoratee:
                         result = decoratee(*args, **kwargs)
-            except Exception as e:  # noqa
+            except builtins.Exception:  # noqa
                 result = Raise(*sys.exc_info())
 
         if isinstance(result, Raise):
@@ -357,6 +361,7 @@ class Decorator[** Param, Ret, _CooperativeDecorated, _SynchronousDecorated](Bas
             __module__=str(decoratee.__module__),
             __name__=str(decoratee.__name__),
             __qualname__=str(decoratee.__qualname__),
+            __signature__=inspect.signature(decoratee),
             decoratee=decoratee,
             decorator=self,
         )

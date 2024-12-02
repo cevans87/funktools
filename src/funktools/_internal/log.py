@@ -10,43 +10,85 @@ from . import base
 
 Level = typing.Literal['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'NOTSET']
 
+type _CooperativeDecoratee[** Param, Ret] = base.CooperativeDecoratee[Param, Ret]
+type _SynchronousDecoratee[** Param, Ret] = base.SynchronousDecoratee[Param, Ret]
+type _CooperativeExit[** Param, Ret] = CooperativeExit[Param, Ret]
+type _SynchronousExit[** Param, Ret] = SynchronousExit[Param, Ret]
+type _CooperativeEnter[** Param, Ret] = CooperativeEnter[Param, Ret]
+type _SynchronousEnter[** Param, Ret] = SynchronousEnter[Param, Ret]
+type _CooperativeDecorated[** Param, Ret] = CooperativeDecorated[Param, Ret]
+type _SynchronousDecorated[** Param, Ret] = SynchronousDecorated[Param, Ret]
+type _Decorator[** Param, Ret] = Decorator[Param, Ret]
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class EnterContext[** Params, Return](
-    base.EnterContext,
+class Base(
+    base.Base[
+        _CooperativeExit,
+        _SynchronousExit,
+        _CooperativeEnter,
+        _SynchronousEnter,
+        _CooperativeDecorated,
+        _SynchronousDecorated,
+        _Decorator,
+    ],
     abc.ABC,
-):
-    call_level: Level
-    err_level: Level
-    logger: logging.Logger
-    ok_level: Level
-    signature: inspect.Signature
-
-    @abc.abstractmethod
-    def __call__(
-        self,
-        *args: Params.args,
-        **kwargs: Params.kwargs,
-    ) -> (ExitContext[Params, Return], base.EnterContext[Params, Return]):
-        bound_arguments = self.signature.bind(*args, **kwargs)
-
-        self.logger.log(
-            logging.getLevelNamesMapping()[self.call_level],
-            '%s',
-            bound_arguments,
-        )
-
-        return self.exit_context_t(
-            bound_arguments=bound_arguments,
-            err_level=self.err_level,
-            logger=self.logger,
-            ok_level=self.ok_level,
-        ), self.next_enter_context
+): ...
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class ExitContext[** Params, Return](
-    base.ExitContext,
+class Call[_Decoratee, _Exit, _Enter, _Decorated, _Decorator](
+    Base,
+    base.Call[_Decoratee, _Exit, _Enter, _Decorated, _Decorator],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Cooperative[** Param, Ret](
+    Call[
+        base.CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.Cooperative[
+        base.CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Synchronous[** Param, Ret](
+    Call[
+        base.SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.Synchronous[
+        base.SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    abc.ABC,
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Exit[** Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator](
+
+    Call[_Decoratee, typing.Self, _Enter, _Decorated, _Decorator],
+    base.Exit[Param, Ret, _Decoratee, _Enter, _Decorated, _Decorator],
     abc.ABC,
 ):
     bound_arguments: inspect.BoundArguments
@@ -55,16 +97,12 @@ class ExitContext[** Params, Return](
     ok_level: Level
 
     @abc.abstractmethod
-    def __call__(
-        self,
-        result: base.Raise | Return
-    ) -> base.Raise | Return:
+    def __call__(self, result: base.Raise | Ret) -> ():
         if isinstance(result, base.Raise):
             self.logger.log(
                 logging.getLevelNamesMapping()[self.err_level],
                 '%s raised %s',
                 self.bound_arguments, result.exc_val,
-                #exc_info=(result.exc_type, result.exc_val, result.exc_tb),
             )
         else:
             self.logger.log(
@@ -74,89 +112,207 @@ class ExitContext[** Params, Return](
                 result,
             )
 
-        return result
+        return tuple()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncEnterContext[** Params, Return](
-    EnterContext[Params, Return],
-    base.AsyncEnterContext[Params, Return],
+class Enter[** Param, Ret, _Decoratee, _Exit, _Decorated, _Decorator](
+    Call[_Decoratee, _Exit, typing.Self, _Decorated, _Decorator],
+    base.Enter[Param, Ret, _Decoratee, _Exit, _Decorated, _Decorator],
+    abc.ABC,
 ):
-    async def __call__(
-        self,
-        *args: Params.args,
-        **kwargs: Params.kwargs
-    ) -> tuple[AsyncExitContext[Params, Return], base.AsyncEnterContext[Params, Return]] | Return:
-        return super().__call__(*args, **kwargs)
+    signature: inspect.Signature
 
+    @abc.abstractmethod
+    def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Exit, _Decoratee]:
+        bound_arguments = inspect.signature(self.decorated).bind(*args, **kwargs)
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiEnterContext[** Params, Return](
-    EnterContext[Params, Return],
-    base.MultiEnterContext[Params, Return],
-):
-
-    def __call__(
-        self,
-        *args: Params.args,
-        **kwargs: Params.kwargs
-    ) -> tuple[MultiExitContext[Params, Return], base.MultiEnterContext[Params, Return]] | Return:
-        return super().__call__(*args, **kwargs)
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class AsyncExitContext[** Params, Return](
-    ExitContext[Params, Return],
-    base.AsyncExitContext[Params, Return],
-):
-
-    async def __call__(self, result: base.Raise | Return) -> base.Raise | Return:
-        return super().__call__(result)
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class MultiExitContext[** Params, Return](
-    ExitContext[Params, Return],
-    base.MultiExitContext[Params, Return],
-):
-
-    def __call__(self, result: base.Raise | Return) -> base.Raise | Return:
-        return super().__call__(result)
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class Decorator[** Params, Return](base.Decorator[Params, Return]):
-    call_level: Level = 'DEBUG'
-    err_level: Level = 'ERROR'
-    logger: logging.Logger = ...
-    ok_level: Level = 'INFO'
-
-    def __call__(
-        self,
-        decoratee: base.Decoratee[Params, Return] | base.Decorated[Params, Return],
-        /,
-    ) -> base.Decorated[Params, Return]:
-        decoratee = super().__call__(decoratee)
-
-        match decoratee:
-            case base.AsyncDecorated():
-                enter_context_t = AsyncEnterContext[Params, Return]
-            case base.MultiDecorated():
-                enter_context_t = MultiEnterContext[Params, Return]
-            case _: assert False, 'Unreachable'  # pragma: no cover
-
-        logger = logging.getLogger(str(decoratee.register_key)) if self.logger is ... else self.logger
-
-        decorated = self.register.decorateds[decoratee.register_key] = dataclasses.replace(
-            decoratee,
-            enter_context=enter_context_t(
-                call_level=self.call_level,
-                err_level=self.err_level,
-                logger=logger,
-                next_enter_context=decoratee.enter_context,
-                ok_level=self.ok_level,
-                signature=decoratee.signature,
-            ),
+        self.decorated.decorator.logger.log(
+            logging.getLevelNamesMapping()[self.decorated.decorator.call_level],
+            '%s',
+            bound_arguments,
         )
 
-        return decorated
+        return self.exit_t(bound_arguments=bound_arguments), self.decorated.decoratee,
+
+
+class Decorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator](
+    Call[_Decoratee, _Exit, _Enter, typing.Self, _Decorator],
+    base.Decorated[Param, Ret, _Decoratee, _Exit, _Enter, _Decorator],
+    abc.ABC,
+): ...
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeExit[** Param, Ret](
+    Cooperative[Param, Ret],
+    Exit[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.CooperativeExit[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+
+    @typing.overload
+    async def __call__(self, result: Ret) -> Ret: ...
+    @typing.overload
+    async def __call__(self, result: base.Raise) -> base.Raise: ...
+    async def __call__(self, result):
+        return super().__call__(result)
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SynchronousExit[** Param, Ret](
+    Synchronous[Param, Ret],
+    Exit[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.SynchronousExit[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+
+    @typing.overload
+    def __call__(self, result: Ret) -> Ret: ...
+    @typing.overload
+    def __call__(self, result: base.Raise) -> base.Raise: ...
+    def __call__(self, result):
+        return super().__call__(result)
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeEnter[** Param, Ret](
+    Cooperative[Param, Ret],
+    Enter[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.CooperativeEnter[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+    type _Decoratee = _CooperativeDecoratee[Param, Ret]
+    type _Exit = _CooperativeExit[Param, Ret]
+    type _Enter = typing.Self
+    type _Decorator = _Decorator[Param, Ret]
+
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Exit, _Decoratee]:
+        return super().__call__(*args, **kwargs)
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SynchronousEnter[** Param, Ret](
+    Synchronous[Param, Ret],
+    Enter[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.SynchronousEnter[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _SynchronousDecorated[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+):
+    type _Decoratee = _SynchronousDecoratee[Param, Ret]
+    type _Exit = _SynchronousExit[Param, Ret]
+    type _Enter = typing.Self
+    type _Decorator = _Decorator[Param, Ret]
+
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Exit, _Decoratee]:
+        return super().__call__(*args, **kwargs)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CooperativeDecorated[** Param, Ret](
+    Cooperative[Param, Ret],
+    Decorated[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.CooperativeDecorated[
+        Param,
+        Ret,
+        _CooperativeDecoratee[Param, Ret],
+        _CooperativeExit[Param, Ret],
+        _CooperativeEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+): ...
+
+
+@typing.final
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SynchronousDecorated[** Param, Ret](
+    Synchronous[Param, Ret],
+    Decorated[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+    base.SynchronousDecorated[
+        Param,
+        Ret,
+        _SynchronousDecoratee[Param, Ret],
+        _SynchronousExit[Param, Ret],
+        _SynchronousEnter[Param, Ret],
+        _Decorator[Param, Ret],
+    ],
+): ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Decorator[** Param, Ret](
+    base.Decorator[Param, Ret, CooperativeDecorated[Param, Ret], SynchronousDecorated[Param, Ret]],
+):
+    logger: logging.Logger
+    call_level: Level = 'DEBUG'
+    err_level: Level = 'ERROR'
+    ok_level: Level = 'INFO'

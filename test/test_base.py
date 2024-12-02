@@ -36,9 +36,6 @@ async def test_async_method() -> None:
         async def bar(self, v):
             return locals()
 
-    foo = Foo()
-    x = await foo.bar(2)
-
     assert await (foo := Foo()).bar(42) == {'self': foo, 'v': 42}
 
 

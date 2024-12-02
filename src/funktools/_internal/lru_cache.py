@@ -119,11 +119,13 @@ class Decorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator, _Future](
     future_by_key: collections.OrderedDict[Key, _Future] = dataclasses.field(default_factory=collections.OrderedDict)
 
     def __get__(self, instance, owner) -> typing.Self:
-        return self.decorated_by_instance.setdefault(
-            instance, dataclasses.replace(
-                self,
-                decoratee=self.decoratee.__get__(instance, owner),
-                future_by_key=collections.OrderedDict(),
+        return decorated if (decorated := self.decorated_by_instance.get(instance)) is not None else (
+            self.decorated_by_instance.setdefault(
+                instance, dataclasses.replace(
+                    self,
+                    decoratee=self.decoratee.__get__(instance, owner),
+                    future_by_key=collections.OrderedDict(),
+                )
             )
         )
 
@@ -131,7 +133,6 @@ class Decorated[** Param, Ret, _Decoratee, _Exit, _Enter, _Decorator, _Future](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CooperativeExit[** Param, Ret](
-    Cooperative,
     Exit[
         Param,
         Ret,
@@ -141,6 +142,7 @@ class CooperativeExit[** Param, Ret](
         _Decorator[Param, Ret],
         asyncio.Future[Ret],
     ],
+    Cooperative[Param, Ret],
     base.CooperativeExit[
         Param,
         Ret,
@@ -161,7 +163,6 @@ class CooperativeExit[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SynchronousExit[** Param, Ret](
-    Synchronous,
     Exit[
         Param,
         Ret,
@@ -171,6 +172,7 @@ class SynchronousExit[** Param, Ret](
         _Decorator[Param, Ret],
         concurrent.futures.Future[Ret],
     ],
+    Synchronous[Param, Ret],
     base.SynchronousExit[
         Param,
         Ret,
@@ -191,7 +193,6 @@ class SynchronousExit[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CooperativeEnter[** Param, Ret](
-    Cooperative,
     Enter[
         Param,
         Ret,
@@ -200,6 +201,7 @@ class CooperativeEnter[** Param, Ret](
         _CooperativeDecorated[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Cooperative[Param, Ret],
     base.CooperativeEnter[
         Param,
         Ret,
@@ -214,7 +216,7 @@ class CooperativeEnter[** Param, Ret](
     type _Enter = typing.Self
     type _Decorator = _Decorator[Param, Ret]
 
-    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Decoratee] | tuple[_Exit, _Decorator]:
+    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Decoratee] | tuple[_Exit, _Decoratee]:
         key = self.decorated.decorator.generate_key(*args, **kwargs)
 
         future = self.decorated.future_by_key.pop(key, None)
@@ -231,7 +233,6 @@ class CooperativeEnter[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SynchronousEnter[** Param, Ret](
-    Synchronous,
     Enter[
         Param,
         Ret,
@@ -240,6 +241,7 @@ class SynchronousEnter[** Param, Ret](
         _SynchronousDecorated[Param, Ret],
         _Decorator[Param, Ret],
     ],
+    Synchronous[Param, Ret],
     base.SynchronousEnter[
         Param,
         Ret,
@@ -254,7 +256,7 @@ class SynchronousEnter[** Param, Ret](
     type _Enter = typing.Self
     type _Decorator = _Decorator[Param, Ret]
 
-    def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Decoratee] | tuple[_Exit, _Decorator]:
+    def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> tuple[_Decoratee] | tuple[_Exit, _Decoratee]:
         key = self.decorated.decorator.generate_key(*args, **kwargs)
 
         future = self.decorated.future_by_key.pop(key, None)
@@ -270,7 +272,6 @@ class SynchronousEnter[** Param, Ret](
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CooperativeDecorated[** Param, Ret](
-    Cooperative,
     Decorated[
         Param,
         Ret,
@@ -280,6 +281,7 @@ class CooperativeDecorated[** Param, Ret](
         _Decorator[Param, Ret],
         asyncio.Future[Ret],
     ],
+    Cooperative[Param, Ret],
     base.CooperativeDecorated[
         Param,
         Ret,
@@ -294,7 +296,6 @@ class CooperativeDecorated[** Param, Ret](
 @typing.final
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SynchronousDecorated[** Param, Ret](
-    Synchronous,
     Decorated[
         Param,
         Ret,
@@ -304,6 +305,7 @@ class SynchronousDecorated[** Param, Ret](
         _Decorator[Param, Ret],
         concurrent.futures.Future[Ret],
     ],
+    Synchronous[Param, Ret],
     base.SynchronousDecorated[
         Param,
         Ret,
@@ -317,7 +319,7 @@ class SynchronousDecorated[** Param, Ret](
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Decorator[** Param, Ret](
-    base.Decorator[Param, Ret, CooperativeDecorated[Param, Ret], SynchronousDecorated[Param, Ret]]
+    base.Decorator[Param, Ret, _CooperativeDecorated[Param, Ret], _SynchronousDecorated[Param, Ret]],
 ):
     generate_key: GenerateKey[Param] = lambda *args, **kwargs: (tuple(args), tuple(sorted([*kwargs.items()])))
     size: int = sys.maxsize
